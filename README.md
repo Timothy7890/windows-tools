@@ -1,19 +1,43 @@
 # windows-tools
 
-Windows SSH 终端工具安装与配置包。参考旁边的 `linux-tools/install.sh`，默认使用 Scoop 安装缺少的 Vim、psmux、Yazi、chafa，Git 和 lazygit 可选，部署可备份的配置。兼容 Windows PowerShell 5.1 / PowerShell 7。
+**为 Windows / SSH 终端准备的交互式工具安装与配置包。**
 
-这是 Windows 本地脚本包：将**整个 windows-tools 文件夹**复制到 Windows 后运行；尚未发布远程下载链接。软件版本由 Scoop 当时的 bucket 决定，并非锁定版本。
+默认安装 **Vim · psmux · Yazi · chafa**，Git / lazygit 按需选择。参考 `linux-tools` 的使用方式，通过 Scoop 安装缺少的软件，并保留已有配置。
 
-## 交互式安装（推荐）
+**运行环境：** Windows PowerShell 5.1 / PowerShell 7  ·  **默认代理：** `127.0.0.1:17897`
 
-把**整个 windows-tools 文件夹**复制到 Windows，在 PowerShell 中进入该目录：
+> [!TIP]
+> **想给 Yazi 的 Shift+R 增加传输服务器？** 直接查看 [扩展传输目标](#transfer-targets)：配置 SSH 别名，编辑 `targets.json`，保存即生效。
+
+## 导航
+
+- [快速开始](#quick-start) · [命令行用法](#cli)
+- **[扩展 Shift+R 传输目标](#transfer-targets)** · [首次连接 Mac](#mac-ssh)
+- [Yazi 配置与快捷键](#yazi) · [psmux 默认 shell](#psmux-shell) · [代理开关](#proxy)
+- [启动与验收](#verify) · [更新与回滚](#maintenance)
+- [检测、权限与配置保留](#behavior) · [开发验证](#development)
+
+<a id="quick-start"></a>
+
+## 快速开始
+
+通过 Git 克隆，或在 GitHub 点击 **Code → Download ZIP** 并完整解压。请保留整个目录结构。
+
+```powershell
+git clone https://github.com/Timothy7890/windows-tools.git
+cd windows-tools
+```
+
+在 Windows **PowerShell** 中运行：
 
 ```powershell
 Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
 .\install.ps1
 ```
 
-按以下顺序操作：
+### 安装器会做什么
+
+
 
 1. 选择软件。直接回车默认 **vim、psmux、yazi、chafa**；Git 和 lazygit 默认不选。
 2. 检测已有软件，显示路径以及“已存在，跳过下载”“待安装”或“已安装，待修复命令入口”。
@@ -24,7 +48,9 @@ Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
 7. 选择 Yazi 时检查 SSH `macos-yx`：已有直接保留；没有则询问 Mac 地址、用户名、端口和密钥名，生成或复用密钥并备份写入配置。
 8. 为 Windows PowerShell / PowerShell 7 的用户 profile 加载代理快捷函数，不自动开启代理。
 
-选择界面：
+### 软件选择
+
+
 
 ```text
 1 vim [默认]   2 psmux [默认]   3 yazi [默认]   4 chafa [默认]
@@ -33,7 +59,9 @@ Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
 
 可以输入 `1 2`、`vim yazi chafa` 或 `all`。输入有误会提示并重新询问。
 
-## 命令行直接指定
+<a id="cli"></a>
+
+## 命令行用法
 
 ```powershell
 # 空格分隔：只选择这两个软件，跳过软件选择问题
@@ -63,106 +91,115 @@ scoop list
 
 选择 `yazi` 不再自动加入 vim、psmux、chafa、Git 或 lazygit。仅装 Yazi 时，其快捷键涉及的软件若缺失，会提示相应功能暂不可用。未检测到 lazygit 时，新生成的 keymap 不包含 `g i` 快捷键；以后加装 lazygit 后可以自行合并该快捷键，或重新部署 Yazi 配置。
 
-`-NonInteractive` 会关闭本安装器的选择/依赖/代理问题，不代表绕过上游程序自己的问题或策略限制。不传 `-Proxy` 时保留现有网络设置；也可显式传 `-Proxy ''` 跳过代理问题。这些方式都**不保证强制直连**。
+交互模式下，未传 `-Proxy` 时会在需要下载时询问。使用 `-NonInteractive` 或显式传 `-Proxy ''` 则保留现有网络设置，**不强制直连**。`-NonInteractive` 关闭本安装器的问题，不代表绕过上游程序的交互；首次 SSH 配置请单独运行 `setup-ssh.ps1`。
 
-## 检测与跳过规则
+<a id="transfer-targets"></a>
 
-- 首先检查 PATH 中可执行程序/脚本，并打印实际路径；不会把同名 alias/function 当成已安装软件。
-- 接着检查当前 Scoop 根目录中的软件 manifest。已安装但入口缺失时执行 `scoop reset 软件名` 修复，正常情况不重新下载。
-- 额外检查独立安装 Vim、Git 的常见目录，以及 Git 注册表安装位置。
-- 找到 PATH 以外的独立软件，会临时加入本次进程 PATH 并提示你为新终端配置 PATH。
-- 所选软件都存在时，跳过 Scoop 引导和代理设置，只检查配置。
+## 扩展 Yazi 的 Shift+R 传输目标
 
-这是基于命令路径和安装文件的检测，**不是完整的健康/版本兼容性测试**，不保证发现任意磁盘上的自定义便携安装。已检测到却不能运行的软件，请先手动运行检查；脚本不会自动覆盖独立安装版。
+**`Shift+R` 就是大写 `R`。增加目标只需两处：SSH 主机别名 + `targets.json`。无需修改快捷键或传输脚本。**
 
-Yazi 的 `file.exe` 从已有环境变量、Git 命令位置、Scoop Git、Git 注册表和常见安装目录查找。找不到时保留其余配置并提示，不强制安装 Git。稍后可设置 `YAZI_FILE_ONE` 或安装 Git 后重新运行 `-ConfigureOnly`。
+> [!TIP]
+> 默认菜单只包含 **macos-yx → ~/Downloads/**。下面的 Linux、Windows 目标是扩展示例，请替换为自己的主机信息。
 
-## 代理、权限和已有配置
+### 1．先配置并验证 SSH 别名
 
-代理必须运行在 Windows 这台机器上。安装器显式将代理传给 Scoop 引导脚本，并持久配置 Scoop 的 proxy；HTTP_PROXY/HTTPS_PROXY 仅作用于本次进程及子进程。只支持无认证 HTTP 代理地址。
-
-普通用户可安装；管理员会话自动为 Scoop 引导添加 `-RunAsAdmin`。默认环境变量写到当前用户。SSH 场景若希望写到系统级，在管理员会话执行：
+在 **Windows PowerShell** 中打开：
 
 ```powershell
-.\install.ps1 -EnvironmentScope Machine
+vim "$env:USERPROFILE\.ssh\config"
 ```
 
-不要为了改环境变量切换成其他 Windows 账户，否则 Scoop 和配置也会装到另一个账户。
+例如新增 Linux 和 Windows 主机（保留原来的 `macos-yx`）：
 
-如果 Scoop 目录非空但命令不存在且需要安装软件，安装器停止并保留目录。先检查旧安装/恢复 PATH，不会自动删除或搬走现有软件。
+```sshconfig
+Host my-server
+    HostName 192.168.1.100
+    User yourname
+    Port 22
+    IdentityFile ~/.ssh/3090C
+    IdentitiesOnly yes
 
-配置内容相同则跳过；内容不同默认保留并输出 `PRESERVED`，因此已有自定义配置时，部分新功能可能尚未启用。自行合并，或确认使用模板后加 `-ForceConfig`。个人传输目标 `targets.json` 即使指定 ForceConfig 也始终保留。
+Host my-windows
+    HostName 192.168.1.101
+    User yourwindowsuser
+    Port 22
+    IdentityFile ~/.ssh/3090C
+    IdentitiesOnly yes
+```
 
-安装器将已有 Scoop shims 放到本次进程 PATH 最前面；新终端可能仍受原有独立安装软件影响。用 `Get-Command vim -All`、`Get-Command yazi -All` 检查实际路径。不会卸载原来的 Vim。
+把地址、用户名、端口和私钥文件名改成实际值。远端需要授权对应公钥，并提前创建接收目录。先分别确认能够连接：
 
-## 配置和功能
+```powershell
+ssh my-server
+# 退出远端会话后，再测试另一台：
+ssh my-windows
+```
 
-默认写到 `%APPDATA%\yazi\config`；如果已有 `YAZI_CONFIG_HOME` 则使用它。
+### 2．编辑 Yazi 传输目标列表
+
+**默认位置：** `%APPDATA%\yazi\config\scripts\targets.json`
+
+```powershell
+vim "$env:APPDATA\yazi\config\scripts\targets.json"
+```
+
+如果设置过 `YAZI_CONFIG_HOME`，请编辑它下面的 `scripts\targets.json`：
+
+```powershell
+vim "$env:YAZI_CONFIG_HOME\scripts\targets.json"
+```
+
+保留 Mac，再增加两个目标：
+
+```json
+[
+  {
+    "name": "macos-yx",
+    "destination": "macos-yx:~/Downloads/"
+  },
+  {
+    "name": "Linux服务器",
+    "destination": "my-server:/home/yourname/Transfer/"
+  },
+  {
+    "name": "另一台Windows",
+    "destination": "my-windows:D:/Transfer/"
+  }
+]
+```
+
+- **`name`**：菜单显示名称，可以使用中文。
+- **`destination`**：格式为 `SSH别名:目标目录`；别名需配置在 SSH config 中。
+- **Windows 路径**：使用 `/`，例如 `D:/Transfer/`。
+- **目标目录**：提前创建，并确认远端用户有写入权限。
+- **JSON 格式**：条目之间有逗号，最后一项后面没有逗号；不要写注释。保存为 UTF-8。
+
+> [!IMPORTANT]
+> 编辑的是**安装后的配置文件**，不是仓库中的模板 `config/yazi/scripts/targets.json`。安装器会保留已有个人目标列表，重跑安装不会自动覆盖它。
+
+### 3．保存后直接使用
+
+关闭旧传输菜单，在 Yazi 中选中文件，再按 **Shift+R**。新目标会自动出现，**无需重启 Yazi 或 psmux**。
 
 ```text
-config/
-├── vimrc                      → %USERPROFILE%\_vimrc
-└── yazi/
-    ├── yazi.toml              → 回车用 Vim 编辑文本
-    ├── keymap.toml            → 快捷键（安装时生成本机脚本路径）
-    ├── plugins/ssh-copy.yazi/main.lua
-    └── scripts/
-        ├── transfer-start.ps1
-        ├── transfer.ps1
-        └── targets.json
+===============================
+  选择目标服务器
+===============================
+
+  1) macos-yx     ~/Downloads/
+  2) Linux服务器  /home/yourname/Transfer/
+  3) 另一台Windows D:/Transfer/
+  q) 取消
+
+请选择 [1-3/q]:
 ```
 
-- `g C` / `g D` / `g E` / `g F` / `g G`：跳转对应盘符，按键先后输入，大写字母。
-- `g i`：打开 lazygit。
-- 文本文件回车：Vim 编辑，`:q` 返回。
-- `c c` / `c f`：保留 Yazi 原本复制动作，再通过 OSC 52 向 SSH 客户端发送路径/文件名文字。本机终端须允许剪贴板写入，psmux 须支持转发；不能替代文件传输。
-- `R`：psmux 右侧分屏显示目标菜单，scp 传输文件或目录，成功后关闭。必须在 psmux 内运行 Yazi。
-- `YAZI_FILE_ONE`：指向 Scoop Git 的 `usr\bin\file.exe`；chafa 用于字符画预览。不是完整 PDF、视频等预览套件。
+Yazi 需要运行在 psmux 内。首次用小测试文件验收；`scp` 会按其正常行为覆盖目标位置的同名文件。
 
-TOML/Lua 使用 UTF-8 无 BOM；PowerShell 脚本使用 UTF-8 带 BOM，以兼容 PowerShell 5.1 中文文件名。Vim 配置只包含通用编辑设置，没有照搬 Linux 依赖 `/dev/tty` 和 `base64` 的 Vim 剪贴板脚本。
+<a id="mac-ssh"></a>
 
-安装器会备份并合并 PowerShell profile，选择 psmux 时检查其默认 shell；不会终止现有 psmux 会话。也不安装 Linux 的 Zsh/Oh My Zsh/TPM/rsync/btop。文件传输使用 Windows `scp`。
-
-## psmux 默认 shell
-
-选择 psmux 时，检查 `%USERPROFILE%\.psmux.conf` 中直接写出的 `default-shell` 设置：
-
-- 没有：追加 `set -g default-shell powershell`，保留其他配置。
-- 已有：打印配置；回车/1 保留，2 改为 Windows PowerShell，3 改为 PowerShell 7（先检查 pwsh 存在）。
-- 修改前生成 `.bak-*` 备份；其他选项与注释保留。重复运行不重复追加。
-- `-NonInteractive` 下保留已有 shell，没有才新增。`-ForceConfig` 不绕过此保留规则。
-
-可以明确指定，跳过 shell 问题：
-
-```powershell
-.\install.ps1 psmux -ConfigureOnly -PsmuxShell powershell
-.\install.ps1 psmux -ConfigureOnly -PsmuxShell pwsh
-```
-
-只检查该文件里的直接设置，不解析被 source 的其他配置文件或复杂条件；自定义配置请检查最终生效结果。已有 psmux 服务不会自动切换。保存所有窗格工作后，手动 `psmux kill-server` 再启动；脚本不会替你结束会话。
-
-## proxy_on / proxy_off
-
-每次安装会部署 `%LOCALAPPDATA%\windows-tools\proxy.ps1`，并在 Windows PowerShell 和 PowerShell 7 的当前用户、所有宿主 profile 中追加带标记的加载块。已有 profile 内容保留，修改前备份。若 profile 中已有同名命令则保留，不覆盖；可自行处理命名冲突后加载本项目脚本。
-
-新开 PowerShell 即可使用；当前窗口立即加载：
-
-```powershell
-. "$env:LOCALAPPDATA\windows-tools\proxy.ps1"
-proxy_on                       # 使用安装时保存的地址，初始默认 127.0.0.1:17897
-proxy_on 127.0.0.1:7890         # 本次使用其他地址；不改已保存的默认地址
-proxy_off
-```
-
-- `proxy_on` 设置当前进程 HTTP_PROXY/HTTPS_PROXY、.NET 默认代理，并在 Scoop 可用时同步其持久 proxy 配置。
-- `proxy_off` 清除当前进程 HTTP_PROXY/HTTPS_PROXY/ALL_PROXY，禁用该进程的 .NET 默认代理，并将 Scoop proxy 设为 `none`。
-- 打开新 shell **只加载函数，不自动开启代理**。Scoop 配置独立持久保存；已有其他终端的环境变量不受影响。
-- 不修改 Windows 系统代理、Git 自己的 `http.proxy` 配置或任意第三方应用设置；不保证所有程序都遵循这些开关。已有 HTTP 客户端/会话可能保留其创建时的配置。
-- 使用 `-NoProfile` 的会话不自动加载函数，需手动 dot-source 上述文件。
-- 默认地址存于 `%LOCALAPPDATA%\windows-tools\proxy.json`。安装时明确提供/输入的代理会更新该地址并备份旧值；没有提供新代理时保留原值。
-- 可移除各 profile 的 `windows-tools proxy` 标记块来停止加载。`proxy_status` 未包含在本版本。
-
-## 配置 Mac 传输（首次需要）
+## 首次连接 Mac
 
 安装 Yazi 时会自动检查并创建缺少的本地 SSH Host 配置，但远端授权和 SSH 转发仍需要你设置。默认使用中文菜单，只预设 macos-yx（~/Downloads/）。SSH 别名和授权仍需在本机配置，模板本身不会保证连接成功。
 
@@ -204,7 +241,111 @@ proxy_off
 
 若命令不存在，先在 Windows“可选功能”安装 OpenSSH 客户端，再重试。不会自动开启 Windows SSH 服务端、防火墙端口或 Mac 的远程登录。
 
-### 已安装用户更新传输菜单
+<a id="yazi"></a>
+
+## Yazi 配置与快捷键
+
+默认写到 `%APPDATA%\yazi\config`；如果已有 `YAZI_CONFIG_HOME` 则使用它。
+
+```text
+config/
+├── vimrc                      → %USERPROFILE%\_vimrc
+└── yazi/
+    ├── yazi.toml              → 回车用 Vim 编辑文本
+    ├── keymap.toml            → 快捷键（安装时生成本机脚本路径）
+    ├── plugins/ssh-copy.yazi/main.lua
+    └── scripts/
+        ├── transfer-start.ps1
+        ├── transfer.ps1
+        └── targets.json
+```
+
+- `g C` / `g D` / `g E` / `g F` / `g G`：跳转对应盘符，按键先后输入，大写字母。
+- `g i`：打开 lazygit（检测到已安装时才生成该快捷键）。
+- 文本文件回车：Vim 编辑，`:q` 返回。
+- `c c` / `c f`：保留 Yazi 原本复制动作，再通过 OSC 52 向 SSH 客户端发送路径/文件名文字。本机终端须允许剪贴板写入，psmux 须支持转发；不能替代文件传输。
+- `R`：psmux 右侧分屏显示目标菜单，scp 传输文件或目录，成功后关闭。必须在 psmux 内运行 Yazi。
+- `YAZI_FILE_ONE`：指向检测到的 Git 安装目录中的 `usr\bin\file.exe`；chafa 用于字符画预览。不是完整 PDF、视频等预览套件。
+
+TOML/Lua 使用 UTF-8 无 BOM；PowerShell 脚本使用 UTF-8 带 BOM，以兼容 PowerShell 5.1 中文文件名。Vim 配置只包含通用编辑设置，没有照搬 Linux 依赖 `/dev/tty` 和 `base64` 的 Vim 剪贴板脚本。
+
+安装器会备份并合并 PowerShell profile，选择 psmux 时检查其默认 shell；不会终止现有 psmux 会话。也不安装 Linux 的 Zsh/Oh My Zsh/TPM/rsync/btop。文件传输使用 Windows `scp`。
+
+<a id="psmux-shell"></a>
+
+## psmux 默认 shell
+
+选择 psmux 时，检查 `%USERPROFILE%\.psmux.conf` 中直接写出的 `default-shell` 设置：
+
+- 没有：追加 `set -g default-shell powershell`，保留其他配置。
+- 已有：打印配置；回车/1 保留，2 改为 Windows PowerShell，3 改为 PowerShell 7（先检查 pwsh 存在）。
+- 修改前生成 `.bak-*` 备份；其他选项与注释保留。重复运行不重复追加。
+- `-NonInteractive` 下保留已有 shell，没有才新增。`-ForceConfig` 不绕过此保留规则。
+
+可以明确指定，跳过 shell 问题：
+
+```powershell
+.\install.ps1 psmux -ConfigureOnly -PsmuxShell powershell
+.\install.ps1 psmux -ConfigureOnly -PsmuxShell pwsh
+```
+
+只检查该文件里的直接设置，不解析被 source 的其他配置文件或复杂条件；自定义配置请检查最终生效结果。已有 psmux 服务不会自动切换。保存所有窗格工作后，手动 `psmux kill-server` 再启动；脚本不会替你结束会话。
+
+<a id="proxy"></a>
+
+## 代理开关
+
+每次安装会部署 `%LOCALAPPDATA%\windows-tools\proxy.ps1`，并在 Windows PowerShell 和 PowerShell 7 的当前用户、所有宿主 profile 中追加带标记的加载块。已有 profile 内容保留，修改前备份。若 profile 中已有同名命令则保留，不覆盖；可自行处理命名冲突后加载本项目脚本。
+
+新开 PowerShell 即可使用；当前窗口立即加载：
+
+```powershell
+. "$env:LOCALAPPDATA\windows-tools\proxy.ps1"
+proxy_on                       # 使用安装时保存的地址，初始默认 127.0.0.1:17897
+proxy_on 127.0.0.1:7890         # 本次使用其他地址；不改已保存的默认地址
+proxy_off
+```
+
+- `proxy_on` 设置当前进程 HTTP_PROXY/HTTPS_PROXY、.NET 默认代理，并在 Scoop 可用时同步其持久 proxy 配置。
+- `proxy_off` 清除当前进程 HTTP_PROXY/HTTPS_PROXY/ALL_PROXY，禁用该进程的 .NET 默认代理，并将 Scoop proxy 设为 `none`。
+- 打开新 shell **只加载函数，不自动开启代理**。Scoop 配置独立持久保存；已有其他终端的环境变量不受影响。
+- 不修改 Windows 系统代理、Git 自己的 `http.proxy` 配置或任意第三方应用设置；不保证所有程序都遵循这些开关。已有 HTTP 客户端/会话可能保留其创建时的配置。
+- 使用 `-NoProfile` 的会话不自动加载函数，需手动 dot-source 上述文件。
+- 默认地址存于 `%LOCALAPPDATA%\windows-tools\proxy.json`。安装时明确提供/输入的代理会更新该地址并备份旧值；没有提供新代理时保留原值。
+- 可移除各 profile 的 `windows-tools proxy` 标记块来停止加载。`proxy_status` 未包含在本版本。
+
+<a id="verify"></a>
+
+## 启动与验收
+
+安装退出后，打开新终端/重新 SSH 登录：
+
+```powershell
+$env:YAZI_FILE_ONE
+Get-Command vim,psmux,yazi,scp | Select-Object Name,Source
+psmux
+# 进入 psmux 后执行：
+yazi
+```
+
+先验收切盘、文本预览、Vim、图片字符画，再测试 Mac 粘贴，最后测试 R 传输。CLI 下载成功不代表终端剪贴板和 SSH 授权已完成。
+
+已有 psmux 服务可能保留旧环境。先保存所有分屏工作，才可执行 `psmux kill-server` 并重新打开；安装器不会自动执行它。如果重新 SSH 后环境变量为空，检查对应用户/系统变量，并从拿到新变量的终端启动新服务。
+
+<a id="maintenance"></a>
+
+## 更新与回滚
+
+### 更新代码与已部署配置
+
+```powershell
+git pull
+```
+
+`git pull` 只更新仓库文件，不会自动更新已部署的配置。默认重跑安装器仍会保留不同的现有配置；使用 `-ForceConfig` 前确认是否要用模板替换。
+
+<details>
+<summary><strong>已安装用户：备份并更新传输菜单（展开查看）</strong></summary>
 
 将新版安装包完整解压后，在新版 `windows-tools` 目录执行下面的命令。只备份并替换传输菜单脚本和目标列表，不改 Yazi 快捷键、插件或其他配置：
 
@@ -227,38 +368,12 @@ foreach ($name in @('transfer.ps1', 'targets.json')) {
 
 这会把目标列表恢复为默认的 macos-yx 一个目标。如果已有个人新增目标，请从备份中合并回来。关闭旧传输菜单，在 Yazi 再按 `R` 即可，无需重启 psmux。
 
-注意：普通安装和 `-ForceConfig` 都会保留已存在的 `targets.json`，因此仅重跑安装器不能更新旧菜单的目标列表。
+> [!NOTE]
+> 普通安装和 `-ForceConfig` 都会保留已有 `targets.json`。只更新脚本、不想重置个人目标时，将上面数组改为 `@('transfer.ps1')`。
 
-### 添加其他目标
+</details>
 
-编辑安装后的 `%APPDATA%\yazi\config\scripts\targets.json`（使用 YAZI_CONFIG_HOME 时相应调整）：
-
-```json
-[
-  { "name": "Mac Downloads", "destination": "macos-yx:~/Downloads/" },
-  { "name": "另一台 Windows", "destination": "my-windows:D:/Transfer/" }
-]
-```
-
-先在 Windows 的 `%USERPROFILE%\.ssh\config` 中配置相应别名，确认 `ssh my-windows` 可连接。目标目录应事先存在。无需修改 PowerShell 菜单代码。scp 对目标同名文件采用其正常覆盖行为，首次验收用专门的小测试文件。
-
-## 启动与验收
-
-安装退出后，打开新终端/重新 SSH 登录：
-
-```powershell
-$env:YAZI_FILE_ONE
-Get-Command vim,psmux,yazi,scp | Select-Object Name,Source
-psmux
-# 进入 psmux 后执行：
-yazi
-```
-
-先验收切盘、文本预览、Vim、图片字符画，再测试 Mac 粘贴，最后测试 R 传输。CLI 下载成功不代表终端剪贴板和 SSH 授权已完成。
-
-已有 psmux 服务可能保留旧环境。先保存所有分屏工作，才可执行 `psmux kill-server` 并重新打开；安装器不会自动执行它。如果重新 SSH 后环境变量为空，检查对应用户/系统变量，并从拿到新变量的终端启动新服务。
-
-## 回滚与维护
+### 回滚与维护
 
 - 修改前的配置保存在原文件旁的 `.bak-*`，手动恢复即可。
 - 未修改的文件不会反复生成备份。
@@ -266,6 +381,48 @@ yazi
 - 取消 Scoop 自定义代理：`scoop config rm proxy`（恢复默认行为，不保证强制直连）。
 - 删除变量前先检查其他工具是否使用它；用户变量可用 `[Environment]::SetEnvironmentVariable('YAZI_FILE_ONE', $null, 'User')` 删除。系统级需管理员并改为 `Machine`。
 - 更新软件版本后重新验收快捷键和插件；保存 `scoop list` 输出有助于复现。
+
+<a id="behavior"></a>
+
+## 检测、权限与配置保留
+
+<details>
+<summary><strong>软件检测和预览依赖</strong></summary>
+
+- 首先检查 PATH 中可执行程序/脚本，并打印实际路径；不会把同名 alias/function 当成已安装软件。
+- 接着检查当前 Scoop 根目录中的软件 manifest。已安装但入口缺失时执行 `scoop reset 软件名` 修复，正常情况不重新下载。
+- 额外检查独立安装 Vim、Git 的常见目录，以及 Git 注册表安装位置。
+- 找到 PATH 以外的独立软件，会临时加入本次进程 PATH 并提示你为新终端配置 PATH。
+- 所选软件都存在时，跳过 Scoop 引导和代理设置，只检查配置。
+
+这是基于命令路径和安装文件的检测，**不是完整的健康/版本兼容性测试**，不保证发现任意磁盘上的自定义便携安装。已检测到却不能运行的软件，请先手动运行检查；脚本不会自动覆盖独立安装版。
+
+Yazi 的 `file.exe` 从已有环境变量、Git 命令位置、Scoop Git、Git 注册表和常见安装目录查找。找不到时保留其余配置并提示，不强制安装 Git。稍后可设置 `YAZI_FILE_ONE` 或安装 Git 后重新运行 `-ConfigureOnly`。
+
+</details>
+
+<details>
+<summary><strong>代理范围、管理员权限和配置备份</strong></summary>
+
+代理必须运行在 Windows 这台机器上。安装器显式将代理传给 Scoop 引导脚本，并持久配置 Scoop 的 proxy；HTTP_PROXY/HTTPS_PROXY 仅作用于本次进程及子进程。只支持无认证 HTTP 代理地址。
+
+普通用户可安装；管理员会话自动为 Scoop 引导添加 `-RunAsAdmin`。默认环境变量写到当前用户。SSH 场景若希望写到系统级，在管理员会话执行：
+
+```powershell
+.\install.ps1 -EnvironmentScope Machine
+```
+
+不要为了改环境变量切换成其他 Windows 账户，否则 Scoop 和配置也会装到另一个账户。
+
+如果 Scoop 目录非空但命令不存在且需要安装软件，安装器停止并保留目录。先检查旧安装/恢复 PATH，不会自动删除或搬走现有软件。
+
+配置内容相同则跳过；内容不同默认保留并输出 `PRESERVED`，因此已有自定义配置时，部分新功能可能尚未启用。自行合并，或确认使用模板后加 `-ForceConfig`。个人传输目标 `targets.json` 即使指定 ForceConfig 也始终保留。
+
+安装器将已有 Scoop shims 放到本次进程 PATH 最前面；新终端可能仍受原有独立安装软件影响。用 `Get-Command vim -All`、`Get-Command yazi -All` 检查实际路径。不会卸载原来的 Vim。
+
+</details>
+
+<a id="development"></a>
 
 ## 开发验证
 
@@ -279,6 +436,6 @@ pwsh -NoProfile -File .\tests\ssh.ps1
 
 测试覆盖交互默认值/自定义输入/重试、命令行空格参数、已有命令/独立安装/Scoop 入口缺失检测，并解析全部 PowerShell 脚本，验证配置保留/备份/重复执行、代理输入、并发选择列表、中文/空格/单引号文件名和传输清理。另外验证 psmux shell 保留/修改/CRLF/备份、profile 合并/重复运行/保留同名函数、代理开关与 Scoop 同步。新增 SSH 默认参数、密钥生成/复用、已有 Host 保留、配置备份和无交互行为测试。psmux/scp/Scoop/ssh-keygen 用测试替身；不联网、不安装软件、不传输真实文件。
 
-目前已在 macOS 的 PowerShell 7.4.6 上完成上述检查及 TOML 解析；**尚未完成真实 Windows 5.1、Scoop 安装、Yazi/psmux 交互和 Mac 剪贴板端到端测试**。第一次 Windows 安装请按上面的验收顺序执行。
+已在 macOS 的 PowerShell 7.4.6 上完成自动检查及 TOML 解析。用户提供的 Windows 日志已确认 Scoop 和四个默认软件安装成功、配置写入及 SSH 密钥生成流程跑通；**Yazi/psmux 交互、Mac 剪贴板与真实文件传输仍需按上面的步骤验收**。软件版本跟随 Scoop bucket，未锁定。
 
 参考：[Scoop 安装](https://github.com/ScoopInstaller/Install)、[Scoop 代理](https://github.com/ScoopInstaller/Scoop/wiki/Using-Scoop-behind-a-proxy)、[Yazi 配置](https://yazi-rs.github.io/docs/configuration/overview/)、[psmux](https://github.com/psmux/psmux)。OSC 52 插件与基本传输方案来自现有 Windows Yazi 操作笔记。
