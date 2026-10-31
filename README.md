@@ -1,52 +1,96 @@
 # windows-tools
 
-Windows SSH 终端工具安装与配置包。参考旁边的 `linux-tools/install.sh`，使用 Scoop 安装 Git、Vim、psmux、Yazi、chafa、lazygit，部署可备份的配置。兼容 Windows PowerShell 5.1 / PowerShell 7。
+Windows SSH 终端工具安装与配置包。参考旁边的 `linux-tools/install.sh`，默认使用 Scoop 安装缺少的 Vim、psmux、Yazi、chafa，Git 和 lazygit 可选，部署可备份的配置。兼容 Windows PowerShell 5.1 / PowerShell 7。
 
 这是 Windows 本地脚本包：将**整个 windows-tools 文件夹**复制到 Windows 后运行；尚未发布远程下载链接。软件版本由 Scoop 当时的 bucket 决定，并非锁定版本。
 
-## 一次安装
+## 交互式安装（推荐）
 
-在 Windows PowerShell 中进入该文件夹：
+把**整个 windows-tools 文件夹**复制到 Windows，在 PowerShell 中进入该目录：
 
 ```powershell
 Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
-.\install.ps1 -Proxy http://127.0.0.1:17897
+.\install.ps1
 ```
 
-代理必须运行在 Windows 这台机器上。安装器显式将代理传给 Scoop 引导脚本，并持久配置 Scoop 的 proxy；HTTP_PROXY/HTTPS_PROXY 设置仅作用于本次进程及其子进程。只支持无认证 HTTP 代理地址。不传 `-Proxy` 时保留已有网络/代理设置，并不强制直连。
+按以下顺序操作：
 
-普通用户可安装；管理员会话会自动为 Scoop 引导添加 `-RunAsAdmin`，不需要手动判断。默认环境变量写到当前用户。SSH 场景若希望写到系统级，请在管理员会话执行：
+1. 选择软件。直接回车默认 **vim、psmux、yazi、chafa**；Git 和 lazygit 默认不选。
+2. 检测已有软件，显示路径以及“已存在，跳过下载”“待安装”或“已安装，待修复命令入口”。
+3. 如果选了 Yazi 但找不到 `file.exe`，说明预览依赖缺失，询问是否额外安装 Git，**默认 N**。拒绝不会中止其余安装。
+4. 需要下载时才询问代理。回车使用 **127.0.0.1:17897**，也可输入其他地址；输入 `keep` 保留已有网络设置。
+5. 只下载缺少的软件，再检查配置。已经存在的全部软件不重新下载，也不自动升级。
 
-```powershell
-.\install.ps1 -Proxy http://127.0.0.1:17897 -EnvironmentScope Machine
+选择界面：
+
+```text
+1 vim [默认]   2 psmux [默认]   3 yazi [默认]   4 chafa [默认]
+5 git [可选]   6 lazygit [可选]   all 全部   q 退出
 ```
 
-不要为了改环境变量而切换成其他 Windows 账户，否则 Scoop 和配置也会装到另一个账户。
+可以输入 `1 2`、`vim yazi chafa` 或 `all`。输入有误会提示并重新询问。
 
-如果 Scoop 目录非空但命令不存在，安装器停止并保留目录。先检查旧安装/恢复 PATH，不会自动删除或搬走现有软件。
-
-## 按需安装 / 重新配置
+## 命令行直接指定
 
 ```powershell
-# 只安装部分软件
+# 空格分隔：只选择这两个软件，跳过软件选择问题
+.\install.ps1 vim psmux
+
+# 同时指定代理；省略时按需询问
+.\install.ps1 vim psmux yazi chafa -Proxy 127.0.0.1:17897
+
+# Git / lazygit 明确选中才安装
+.\install.ps1 git lazygit
+
+# 仍兼容具名数组参数
 .\install.ps1 -Components vim,psmux -Proxy http://127.0.0.1:17897
 
-# Yazi 完整功能会同时带上 git、vim、psmux、chafa、lazygit
-.\install.ps1 -Components yazi -Proxy http://127.0.0.1:17897
+# 无交互模式：使用四个默认软件，不自动加 Git
+.\install.ps1 -NonInteractive -Proxy 127.0.0.1:17897
 
-# 软件已经装好，只部署配置和 YAZI_FILE_ONE
-.\install.ps1 -Components yazi -ConfigureOnly
+# 只部署配置：不下载、不改代理；没有组件参数时仍可交互选择
+.\install.ps1 yazi -ConfigureOnly
 
 # 用模板替换旧配置，每个变更文件先生成 .bak-* 备份
-.\install.ps1 -ConfigureOnly -ForceConfig
+.\install.ps1 -ConfigureOnly -NonInteractive -ForceConfig
 
-# 查看安装版本
+# 查看 Scoop 管理的软件版本（不包含独立安装的软件）
 scoop list
 ```
 
-重复运行不主动升级已安装软件。配置内容相同则跳过；内容不同默认保留并输出 `PRESERVED`，因此已有自定义配置时，部分新功能可能尚未启用。自行合并，或确认使用模板后加 `-ForceConfig`。个人传输目标 `targets.json` 即使指定 ForceConfig 也始终保留。
+选择 `yazi` 不再自动加入 vim、psmux、chafa、Git 或 lazygit。仅装 Yazi 时，其快捷键涉及的软件若缺失，会提示相应功能暂不可用。未检测到 lazygit 时，新生成的 keymap 不包含 `g i` 快捷键；以后加装 lazygit 后可以自行合并该快捷键，或重新部署 Yazi 配置。
 
-安装器会将 Scoop shims 放到**本次进程** PATH 最前面；新终端可能仍受原有独立安装软件影响。用 `Get-Command vim -All`、`Get-Command yazi -All` 检查实际路径。不会卸载你原来的 Vim。
+`-NonInteractive` 会关闭本安装器的选择/依赖/代理问题，不代表绕过上游程序自己的问题或策略限制。不传 `-Proxy` 时保留现有网络设置；也可显式传 `-Proxy ''` 跳过代理问题。这些方式都**不保证强制直连**。
+
+## 检测与跳过规则
+
+- 首先检查 PATH 中可执行程序/脚本，并打印实际路径；不会把同名 alias/function 当成已安装软件。
+- 接着检查当前 Scoop 根目录中的软件 manifest。已安装但入口缺失时执行 `scoop reset 软件名` 修复，正常情况不重新下载。
+- 额外检查独立安装 Vim、Git 的常见目录，以及 Git 注册表安装位置。
+- 找到 PATH 以外的独立软件，会临时加入本次进程 PATH 并提示你为新终端配置 PATH。
+- 所选软件都存在时，跳过 Scoop 引导和代理设置，只检查配置。
+
+这是基于命令路径和安装文件的检测，**不是完整的健康/版本兼容性测试**，不保证发现任意磁盘上的自定义便携安装。已检测到却不能运行的软件，请先手动运行检查；脚本不会自动覆盖独立安装版。
+
+Yazi 的 `file.exe` 从已有环境变量、Git 命令位置、Scoop Git、Git 注册表和常见安装目录查找。找不到时保留其余配置并提示，不强制安装 Git。稍后可设置 `YAZI_FILE_ONE` 或安装 Git 后重新运行 `-ConfigureOnly`。
+
+## 代理、权限和已有配置
+
+代理必须运行在 Windows 这台机器上。安装器显式将代理传给 Scoop 引导脚本，并持久配置 Scoop 的 proxy；HTTP_PROXY/HTTPS_PROXY 仅作用于本次进程及子进程。只支持无认证 HTTP 代理地址。
+
+普通用户可安装；管理员会话自动为 Scoop 引导添加 `-RunAsAdmin`。默认环境变量写到当前用户。SSH 场景若希望写到系统级，在管理员会话执行：
+
+```powershell
+.\install.ps1 -EnvironmentScope Machine
+```
+
+不要为了改环境变量切换成其他 Windows 账户，否则 Scoop 和配置也会装到另一个账户。
+
+如果 Scoop 目录非空但命令不存在且需要安装软件，安装器停止并保留目录。先检查旧安装/恢复 PATH，不会自动删除或搬走现有软件。
+
+配置内容相同则跳过；内容不同默认保留并输出 `PRESERVED`，因此已有自定义配置时，部分新功能可能尚未启用。自行合并，或确认使用模板后加 `-ForceConfig`。个人传输目标 `targets.json` 即使指定 ForceConfig 也始终保留。
+
+安装器将已有 Scoop shims 放到本次进程 PATH 最前面；新终端可能仍受原有独立安装软件影响。用 `Get-Command vim -All`、`Get-Command yazi -All` 检查实际路径。不会卸载原来的 Vim。
 
 ## 配置和功能
 
@@ -156,10 +200,11 @@ yazi
 
 ```powershell
 pwsh -NoProfile -File .\tests\test.ps1
+pwsh -NoProfile -File .\tests\selection.ps1
 # Windows 上也可用 powershell.exe -NoProfile -File .\tests\test.ps1
 ```
 
-测试解析全部 PowerShell 脚本，并验证配置保留/备份/重复执行、代理输入、并发选择列表、中文/空格/单引号文件名和传输清理。psmux/scp 用测试替身；不联网、不安装软件、不传输真实文件。
+测试覆盖交互默认值/自定义输入/重试、命令行空格参数、已有命令/独立安装/Scoop 入口缺失检测，并解析全部 PowerShell 脚本，验证配置保留/备份/重复执行、代理输入、并发选择列表、中文/空格/单引号文件名和传输清理。psmux/scp 用测试替身；不联网、不安装软件、不传输真实文件。
 
 目前已在 macOS 的 PowerShell 7.4.6 上完成上述检查及 TOML 解析；**尚未完成真实 Windows 5.1、Scoop 安装、Yazi/psmux 交互和 Mac 剪贴板端到端测试**。第一次 Windows 安装请按上面的验收顺序执行。
 
