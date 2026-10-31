@@ -80,7 +80,7 @@ function Read-Components {
 }
 function Read-ProxyAddress {
     while ($true) {
-        $answer = (Read-Host '代理地址 [127.0.0.1:17897]；输入 keep 保留现有网络设置').Trim()
+        $answer = (Read-Host '请输入代理地址（直接回车使用 127.0.0.1:17897；输入 keep 跳过代理设置）').Trim()
         if ($answer -eq 'keep') { return '' }
         if (-not $answer) { $answer = '127.0.0.1:17897' }
         try { return (ConvertTo-ProxyUri $answer).AbsoluteUri } catch { Write-Warning $_ }
