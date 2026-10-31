@@ -217,7 +217,7 @@ function Initialize-MacSsh {
         [ValidatePattern('^[a-zA-Z0-9_.-]+$')][string]$MacUser = 'timo',
         [ValidatePattern('^[a-zA-Z0-9_.:-]+$')][string]$HostName = '127.0.0.1',
         [ValidatePattern('^[a-zA-Z0-9_.-]+$')][string]$Alias = 'macos-yx',
-        [ValidatePattern('^[a-zA-Z0-9_.-]+$')][string]$KeyName = 'windows-tools_ed25519',
+        [ValidatePattern('^[a-zA-Z0-9_.-]+$')][string]$KeyName,
         [ValidateRange(1,65535)][int]$Port = 12025,
         [switch]$NonInteractive
     )
@@ -248,8 +248,12 @@ function Initialize-MacSsh {
             }
             while ($true) {
                 $default = Get-Variable $field -ValueOnly
-                $answer = (Read-Host "$label [$default]，回车使用默认").Trim()
-                if (-not $answer) { break }
+                $prompt = if ($field -eq 'KeyName') { "$label（必填）" } else { "$label [$default]，回车使用默认" }
+                $answer = (Read-Host $prompt).Trim()
+                if (-not $answer) {
+                    if ($field -eq 'KeyName') { Write-Warning '密钥文件名不能为空，请自行输入。'; continue }
+                    break
+                }
                 $valid = switch ($field) {
                     'HostName' { $answer -match '^[a-zA-Z0-9_.:-]+$' }
                     'Port' { $answer -match '^\d{1,5}$' -and [int]$answer -ge 1 -and [int]$answer -le 65535 }
@@ -259,6 +263,9 @@ function Initialize-MacSsh {
                 Write-Warning '输入格式无效，请重试。'
             }
         }
+    }
+    if ([string]::IsNullOrWhiteSpace($KeyName)) {
+        throw '必须指定 SSH 密钥文件名：非交互模式请传入 -KeyName。'
     }
     $key = Join-Path $SshDir $KeyName
     if (-not (Test-Path -LiteralPath $key)) {

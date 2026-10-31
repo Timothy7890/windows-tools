@@ -15,8 +15,10 @@ try {
         $global:KeyCalls++
     }
     $global:KeyCalls = 0
-    function Read-Host { return '' }
+    $global:KeyPrompts = 0
+    function Read-Host { param($Prompt); if ($Prompt -match '必填') { $global:KeyPrompts++; if ($global:KeyPrompts -eq 1) { return '' }; return 'my_key' }; return '' }
     Initialize-MacSsh -SshDir $temp
+    Assert ($global:KeyPrompts -eq 2) 'Empty key name did not trigger retry'
     $config = Join-Path $temp 'config'
     $first = [IO.File]::ReadAllText($config)
     Assert ($first -match 'Host macos-yx' -and $first -match 'User timo' -and $first -match 'Port 12025') 'Default SSH config incorrect'
@@ -27,7 +29,7 @@ try {
     Assert (@(Get-ChildItem $temp -Filter 'config.bak-*').Count -eq 0) 'Repeat created unnecessary backup'
     [IO.File]::WriteAllText($config, "# personal`r`nHost other`r`n  HostName example.org`r`nHost *`r`n  User fallback`r`n")
     $previous = [IO.File]::ReadAllText($config)
-    Initialize-MacSsh -SshDir $temp -MacUser alice -HostName 192.168.1.10 -Port 22 -KeyName windows-tools_ed25519 -NonInteractive
+    Initialize-MacSsh -SshDir $temp -MacUser alice -HostName 192.168.1.10 -Port 22 -KeyName my_key -NonInteractive
     $changed = [IO.File]::ReadAllText($config)
     Assert ($changed.StartsWith('Host macos-yx') -and $changed.Contains($previous)) 'Existing hosts lost / precedence wrong'
     Assert ($changed -match 'User alice' -and $changed -match 'Port 22') 'Custom parameters ignored'
@@ -35,7 +37,7 @@ try {
     Assert ($backup.Count -eq 1 -and [IO.File]::ReadAllText($backup[0].FullName) -eq $previous) 'Missing original config backup'
     Assert ($global:KeyCalls -eq 1) 'Existing private key regenerated'
     $empty = Join-Path $temp 'unattended'
-    Initialize-MacSsh -SshDir $empty -NonInteractive
+    Initialize-MacSsh -SshDir $empty -NonInteractive -KeyName missing_key
     Assert (-not (Test-Path (Join-Path $empty 'config'))) 'Unattended missing key wrote unusable config'
     [IO.File]::WriteAllText($config, "Host other macos-yx # comment`n User bob`n")
     Initialize-MacSsh -SshDir $temp
