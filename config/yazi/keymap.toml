@@ -1,0 +1,12 @@
+[mgr]
+prepend_keymap = [
+  { on = ["g", "C"], run = 'cd C:\', desc = "Go to C:" },
+  { on = ["g", "D"], run = 'cd D:\', desc = "Go to D:" },
+  { on = ["g", "E"], run = 'cd E:\', desc = "Go to E:" },
+  { on = ["g", "F"], run = 'cd F:\', desc = "Go to F:" },
+  { on = ["g", "G"], run = 'cd G:\', desc = "Go to G:" },
+  { on = ["g", "i"], run = "shell lazygit --block", desc = "Lazygit" },
+  { on = ["c", "c"], run = ["copy path", "plugin ssh-copy path"], desc = "Copy path to SSH client" },
+  { on = ["c", "f"], run = ["copy filename", "plugin ssh-copy filename"], desc = "Copy filename to SSH client" },
+  { on = "R", run = "@@TRANSFER_COMMAND@@", desc = "Psmux transfer" },
+]

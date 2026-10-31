@@ -1,0 +1,4 @@
+[opener]
+edit = [
+  { run = "vim %s", desc = "Vim", block = true, for = "windows" },
+]
