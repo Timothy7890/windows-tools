@@ -208,3 +208,89 @@ $end
     # A BOM allows Windows PowerShell 5.1 to read existing Chinese profile text.
     Install-ConfigFile '' $Path -Content ([string][char]0xFEFF + $newText) -Force
 }
+
+
+function Initialize-MacSsh {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$SshDir,
+        [ValidatePattern('^[a-zA-Z0-9_.-]+$')][string]$MacUser = 'timo',
+        [ValidatePattern('^[a-zA-Z0-9_.:-]+$')][string]$HostName = '127.0.0.1',
+        [ValidatePattern('^[a-zA-Z0-9_.-]+$')][string]$Alias = 'macos-yx',
+        [ValidatePattern('^[a-zA-Z0-9_.-]+$')][string]$KeyName = 'windows-tools_ed25519',
+        [ValidateRange(1,65535)][int]$Port = 12025,
+        [switch]$NonInteractive
+    )
+    $config = Join-Path $SshDir 'config'
+    $existing = if (Test-Path -LiteralPath $config) { [IO.File]::ReadAllText($config) } else { '' }
+    foreach ($line in ($existing -split '\r?\n')) {
+        if ($line -match '^\s*Host\s+(.+)$') {
+            $names = ($Matches[1] -split '#',2)[0] -split '\s+'
+            if ($names -contains $Alias) {
+                Write-Host "[已存在] SSH Host $Alias，保留配置，不生成或更换密钥。" -ForegroundColor Green
+                return
+            }
+        }
+    }
+    Write-Host "[未配置] SSH Host $Alias，准备创建。" -ForegroundColor Cyan
+    if (-not (Get-Command ssh-keygen -CommandType Application -ErrorAction SilentlyContinue)) {
+        Write-Warning '未找到 ssh-keygen；请安装 Windows OpenSSH 客户端后运行 setup-ssh.ps1。其他软件配置不受影响。'
+        return
+    }
+    if (-not $NonInteractive) {
+        foreach ($field in @('HostName','MacUser','Port','KeyName')) {
+            if ($PSBoundParameters.ContainsKey($field)) { continue }
+            $label = switch ($field) {
+                'HostName' { 'Mac 主机地址' }
+                'MacUser' { 'Mac 用户名' }
+                'Port' { 'SSH 端口' }
+                'KeyName' { '本机 SSH 密钥文件名（已有则复用）' }
+            }
+            while ($true) {
+                $default = Get-Variable $field -ValueOnly
+                $answer = (Read-Host "$label [$default]，回车使用默认").Trim()
+                if (-not $answer) { break }
+                $valid = switch ($field) {
+                    'HostName' { $answer -match '^[a-zA-Z0-9_.:-]+$' }
+                    'Port' { $answer -match '^\d{1,5}$' -and [int]$answer -ge 1 -and [int]$answer -le 65535 }
+                    default { $answer -match '^[a-zA-Z0-9_.-]+$' }
+                }
+                if ($valid) { Set-Variable $field $answer; break }
+                Write-Warning '输入格式无效，请重试。'
+            }
+        }
+    }
+    $key = Join-Path $SshDir $KeyName
+    if (-not (Test-Path -LiteralPath $key)) {
+        if (Test-Path -LiteralPath "$key.pub") { throw '仅公钥存在，私钥缺失；请换一个 KeyName，避免覆盖。' }
+        if ($NonInteractive) {
+            Write-Warning "SSH 配置暂未创建：密钥 $key 不存在。请交互运行 setup-ssh.ps1 创建密钥，或指定已有 -KeyName。"
+            return
+        }
+        $null = New-Item -ItemType Directory -Force -Path $SshDir
+        Write-Host '创建 ed25519 密钥；接下来可输入密钥口令，或回车留空。不会覆盖已有密钥。'
+        & ssh-keygen -t ed25519 -f $key -C 'windows-tools'
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $key)) { throw 'SSH 密钥生成失败，未修改 config。' }
+    } else { Write-Host "复用已有密钥：$key" }
+    $block = @"
+Host $Alias
+    HostName $HostName
+    User $MacUser
+    Port $Port
+    IdentityFile ~/.ssh/$KeyName
+    IdentitiesOnly yes
+    StrictHostKeyChecking ask
+
+"@
+    # Prepend before Host * so explicit host values take precedence.
+    Install-ConfigFile '' $config -Content ($block + "`r`n" + $existing) -Force
+    Write-Host "已创建 SSH Host $Alias：${MacUser}@${HostName}:$Port" -ForegroundColor Green
+    if (Test-Path -LiteralPath "$key.pub") {
+        Write-Host '请将以下公钥追加到 Mac 的 ~/.ssh/authorized_keys：'
+        Get-Content -LiteralPath "$key.pub" | Write-Host
+    } else { Write-Warning '已有私钥没有对应 .pub 文件；请自行确认远端授权，不会自动修改私钥。' }
+    if ($HostName -in @('127.0.0.1','localhost','::1')) {
+        Write-Host "Mac 端需开启远程登录，并在连接 Windows 的 Host 段添加：RemoteForward $Port localhost:22"
+    }
+    Write-Host "连接准备好后测试：ssh $Alias echo ok"
+}

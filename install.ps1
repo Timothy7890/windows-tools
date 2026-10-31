@@ -183,6 +183,7 @@ if ($selected -contains 'yazi') {
             Install-ConfigFile $file.FullName $destination -Force:$replace
         }
     }
+    Initialize-MacSsh -SshDir (Join-Path $env:USERPROFILE '.ssh') -NonInteractive:$NonInteractive
     Write-Host "Yazi config: $configDir"
     if ($fileExe) { Write-Host "YAZI_FILE_ONE ($EnvironmentScope): $fileExe" }
 }
@@ -208,4 +209,4 @@ if ($selected -contains 'yazi') {
 }
 Write-Host '安装与配置步骤完成。上面的待补依赖/保留配置提示如存在，请按需处理。' -ForegroundColor Green
 Write-Host 'Existing psmux sessions keep old environment values. Save work before restarting them.'
-Write-Host 'SSH transfer still requires your SSH host alias, authorized key and (for Mac) reverse forwarding. See README.md.'
+Write-Host 'Mac 传输还需远端公钥授权及反向转发；本地 SSH 配置结果见上方。详见 README.md。'

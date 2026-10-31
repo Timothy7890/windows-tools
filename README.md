@@ -21,7 +21,8 @@ Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
 4. 需要下载时才询问代理。回车使用 **127.0.0.1:17897**，也可输入其他地址；输入 `keep` 保留已有网络设置。
 5. 只下载缺少的软件，再检查配置。已经存在的全部软件不重新下载，也不自动升级。
 6. 选择 psmux 时检查默认 shell：缺失则补上 PowerShell，已有则显示设置并询问是否保留。
-7. 为 Windows PowerShell / PowerShell 7 的用户 profile 加载代理快捷函数，不自动开启代理。
+7. 选择 Yazi 时检查 SSH `macos-yx`：已有直接保留；没有则询问 Mac 地址、用户名、端口和密钥名，生成或复用密钥并备份写入配置。
+8. 为 Windows PowerShell / PowerShell 7 的用户 profile 加载代理快捷函数，不自动开启代理。
 
 选择界面：
 
@@ -163,15 +164,19 @@ proxy_off
 
 ## 配置 Mac 传输（首次需要）
 
-本地配置可以自动部署，但远端授权和 SSH 转发仍需要你设置。默认使用中文菜单，只预设 macos-yx（~/Downloads/）。SSH 别名和授权仍需在本机配置，模板本身不会保证连接成功。
+安装 Yazi 时会自动检查并创建缺少的本地 SSH Host 配置，但远端授权和 SSH 转发仍需要你设置。默认使用中文菜单，只预设 macos-yx（~/Downloads/）。SSH 别名和授权仍需在本机配置，模板本身不会保证连接成功。
 
-1. 在 Windows 中运行（将 timo 换成 Mac 用户名）：
+1. 默认安装已经包含本地 SSH 配置步骤。缺少 `macos-yx` 时依次询问主机地址（默认 `127.0.0.1`）、Mac 用户名（默认 `timo`）、端口（默认 `12025`）、密钥文件名（默认 `windows-tools_ed25519`）。回车接受默认；新密钥创建时会询问口令，可设置或回车留空。
+
+   **已经安装的用户**无需重新安装软件，获取新版完整目录后单独运行（将 timo 换成 Mac 用户名）：
 
    ```powershell
    .\setup-ssh.ps1 -MacUser timo
    ```
 
-   脚本生成独立密钥，询问密钥口令；已有密钥不覆盖。备份并添加 SSH 主机别名，已有同名 Host 则保留。它只打印公钥，不发送消息、不连接或修改 Mac。
+   脚本先检查已有同名 Host，存在则立即保留，不询问或生成新密钥。缺少时复用指定密钥或生成新密钥，备份并写入 SSH config，保留其他 Host；新条目放在文件前面以优先于 Host *。只打印公钥，不连接或修改 Mac。检测针对主 config 中直接声明的 Host 别名；使用 Include 管理的配置请自行确认，避免重复声明。
+
+   可使用 `-HostName 192.168.1.10 -Port 22 -KeyName 已有密钥名` 指定其他值。`-NonInteractive` 不会询问或创建新密钥；指定密钥不存在时会提示跳过 SSH 配置，其他工具继续安装。
 
 2. 在 Mac 中开启“系统设置 → 通用 → 共享 → 远程登录”。将上一步的公钥整行追加到 `~/.ssh/authorized_keys`（不要覆盖已有内容）：
 
@@ -268,10 +273,11 @@ yazi
 pwsh -NoProfile -File .\tests\test.ps1
 pwsh -NoProfile -File .\tests\selection.ps1
 pwsh -NoProfile -File .\tests\shell-proxy.ps1
+pwsh -NoProfile -File .\tests\ssh.ps1
 # Windows 上也可用 powershell.exe -NoProfile -File .\tests\test.ps1
 ```
 
-测试覆盖交互默认值/自定义输入/重试、命令行空格参数、已有命令/独立安装/Scoop 入口缺失检测，并解析全部 PowerShell 脚本，验证配置保留/备份/重复执行、代理输入、并发选择列表、中文/空格/单引号文件名和传输清理。另外验证 psmux shell 保留/修改/CRLF/备份、profile 合并/重复运行/保留同名函数、代理开关与 Scoop 同步。psmux/scp/Scoop 用测试替身；不联网、不安装软件、不传输真实文件。
+测试覆盖交互默认值/自定义输入/重试、命令行空格参数、已有命令/独立安装/Scoop 入口缺失检测，并解析全部 PowerShell 脚本，验证配置保留/备份/重复执行、代理输入、并发选择列表、中文/空格/单引号文件名和传输清理。另外验证 psmux shell 保留/修改/CRLF/备份、profile 合并/重复运行/保留同名函数、代理开关与 Scoop 同步。新增 SSH 默认参数、密钥生成/复用、已有 Host 保留、配置备份和无交互行为测试。psmux/scp/Scoop/ssh-keygen 用测试替身；不联网、不安装软件、不传输真实文件。
 
 目前已在 macOS 的 PowerShell 7.4.6 上完成上述检查及 TOML 解析；**尚未完成真实 Windows 5.1、Scoop 安装、Yazi/psmux 交互和 Mac 剪贴板端到端测试**。第一次 Windows 安装请按上面的验收顺序执行。
 
