@@ -276,7 +276,7 @@ function Initialize-MacSsh {
         }
         $null = New-Item -ItemType Directory -Force -Path $SshDir
         Write-Host '创建 ed25519 密钥；接下来可输入密钥口令，或回车留空。不会覆盖已有密钥。'
-        & ssh-keygen -t ed25519 -f $key -C 'windows-tools'
+        & ssh-keygen -t ed25519 -f $key -C $KeyName
         if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $key)) { throw 'SSH 密钥生成失败，未修改 config。' }
     } else { Write-Host "复用已有密钥：$key" }
     $block = @"

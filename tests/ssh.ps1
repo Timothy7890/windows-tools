@@ -12,6 +12,7 @@ try {
         [IO.File]::WriteAllText($key, 'test-private')
         [IO.File]::WriteAllText("$key.pub", 'ssh-ed25519 test-public')
         $global:LASTEXITCODE = 0
+        $global:KeyComment = $args[[array]::IndexOf($args, '-C') + 1]
         $global:KeyCalls++
     }
     $global:KeyCalls = 0
@@ -23,6 +24,7 @@ try {
     $first = [IO.File]::ReadAllText($config)
     Assert ($first -match 'Host macos-yx' -and $first -match 'User timo' -and $first -match 'Port 12025') 'Default SSH config incorrect'
     Assert ($global:KeyCalls -eq 1) 'Key not generated once'
+    Assert ($global:KeyComment -eq 'my_key') 'Key comment does not match the input filename'
     function Read-Host { throw 'Should not prompt for an existing alias' }
     Initialize-MacSsh -SshDir $temp
     Assert ($global:KeyCalls -eq 1 -and [IO.File]::ReadAllText($config) -eq $first) 'Repeat changed config or key'
