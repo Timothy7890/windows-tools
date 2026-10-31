@@ -73,7 +73,13 @@ if ($ConfigureOnly) {
 } elseif ($toInstall.Count -or $toRepair.Count) {
     Write-Host '[1/3] 安装缺少的软件 / 修复入口' -ForegroundColor Cyan
     # Ask for network settings only after selection/detection, and only if a download may be needed.
-    $needBootstrap = -not (Get-Command scoop -ErrorAction SilentlyContinue)
+    $scoopCommand = Get-Command scoop -ErrorAction SilentlyContinue
+    $needBootstrap = -not $scoopCommand
+    if ($needBootstrap) {
+        Write-Host '未检测到 Scoop，将在网络设置完成后下载安装。' -ForegroundColor Yellow
+    } else {
+        Write-Host "已检测到 Scoop：$($scoopCommand.Source)，直接使用，无需重新下载。" -ForegroundColor Green
+    }
     if (($toInstall.Count -or $needBootstrap) -and -not $PSBoundParameters.ContainsKey('Proxy') -and -not $NonInteractive) {
         $Proxy = Read-ProxyAddress
     }

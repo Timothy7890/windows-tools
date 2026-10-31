@@ -163,7 +163,7 @@ proxy_off
 
 ## 配置 Mac 传输（首次需要）
 
-本地配置可以自动部署，但远端授权和 SSH 转发仍需要你设置。默认目标是 `macos-yx:~/Downloads/`。
+本地配置可以自动部署，但远端授权和 SSH 转发仍需要你设置。默认使用中文菜单，只预设 macos-yx（~/Downloads/）。SSH 别名和授权仍需在本机配置，模板本身不会保证连接成功。
 
 1. 在 Windows 中运行（将 timo 换成 Mac 用户名）：
 
@@ -198,6 +198,31 @@ proxy_off
    首次核对并接受 Mac 主机指纹；如设置了密钥口令，可能需要输入或配合 ssh-agent。能够输出 `ok` 后再测试 Yazi 的 R。反向转发依赖 Mac 到 Windows 的 SSH 连接保持在线。12025 已被占用时先检查已有连接，不要反复创建相同转发。
 
 若命令不存在，先在 Windows“可选功能”安装 OpenSSH 客户端，再重试。不会自动开启 Windows SSH 服务端、防火墙端口或 Mac 的远程登录。
+
+### 已安装用户更新传输菜单
+
+将新版安装包完整解压后，在新版 `windows-tools` 目录执行下面的命令。只备份并替换传输菜单脚本和目标列表，不改 Yazi 快捷键、插件或其他配置：
+
+```powershell
+$ErrorActionPreference = 'Stop'
+$configDir = if ($env:YAZI_CONFIG_HOME) { $env:YAZI_CONFIG_HOME } else { Join-Path $env:APPDATA 'yazi\config' }
+$destDir = Join-Path $configDir 'scripts'
+New-Item -ItemType Directory -Force -Path $destDir | Out-Null
+$stamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
+foreach ($name in @('transfer.ps1', 'targets.json')) {
+    $source = Join-Path '.\config\yazi\scripts' $name
+    if (-not (Test-Path -LiteralPath $source)) { throw "请先进入新版 windows-tools 目录：找不到 $source" }
+    $dest = Join-Path $destDir $name
+    if (Test-Path -LiteralPath $dest) {
+        Copy-Item -LiteralPath $dest -Destination "$dest.bak-$stamp"
+    }
+    Copy-Item -LiteralPath $source -Destination $dest -Force
+}
+```
+
+这会把目标列表恢复为默认的 macos-yx 一个目标。如果已有个人新增目标，请从备份中合并回来。关闭旧传输菜单，在 Yazi 再按 `R` 即可，无需重启 psmux。
+
+注意：普通安装和 `-ForceConfig` 都会保留已存在的 `targets.json`，因此仅重跑安装器不能更新旧菜单的目标列表。
 
 ### 添加其他目标
 
