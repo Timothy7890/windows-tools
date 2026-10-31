@@ -144,3 +144,67 @@ function Find-YaziFileExe {
     }
     return $null
 }
+
+
+function Set-PsmuxShellConfig {
+    param([string]$Path, [switch]$NonInteractive, [string]$Shell)
+    $text = if (Test-Path -LiteralPath $Path) { [IO.File]::ReadAllText($Path) } else { '' }
+    $pattern = '(?m)^[ \t]*(?:set|set-option)[ \t]+(?:-\S+[ \t]+)*default-shell[ \t]+[^\r\n]+\r?$'
+    $settings = [regex]::Matches($text, $pattern)
+    if ($settings.Count) {
+        Write-Host "psmux 当前 default-shell 配置："
+        $settings | ForEach-Object { Write-Host ('  ' + $_.Value.Trim()) }
+        if (-not $Shell) {
+            if ($NonInteractive) {
+                Write-Host '非交互模式：保留已有 psmux shell。'
+                return
+            }
+            while ($true) {
+                $answer = (Read-Host '回车/1 保留；2 改用 Windows PowerShell；3 改用 PowerShell 7').Trim()
+                if (-not $answer -or $answer -eq '1') { return }
+                if ($answer -eq '2') { $Shell = 'powershell'; break }
+                if ($answer -eq '3') {
+                    if (Get-Command pwsh -CommandType Application -ErrorAction SilentlyContinue) { $Shell = 'pwsh'; break }
+                    Write-Warning '未检测到 pwsh，请先安装 PowerShell 7。'
+                } else { Write-Warning '请输入 1、2 或 3。' }
+            }
+        }
+    }
+    if (-not $Shell) { $Shell = 'powershell' }
+    if ($Shell -eq 'pwsh' -and -not (Get-Command pwsh -CommandType Application -ErrorAction SilentlyContinue)) {
+        throw '未检测到 pwsh，无法设置 PowerShell 7 为默认 shell。'
+    }
+    $line = "set -g default-shell $Shell"
+    # Preserve other settings; collapse direct duplicate default-shell settings to one.
+    $newText = if ($settings.Count) { [regex]::Replace($text, $pattern + '(?:\r?\n)?', '') } else { $text }
+    $newText = $newText.TrimEnd("`r", "`n") + "`r`n" + $line + "`r`n"
+    if (-not $text) { $newText = $line + "`r`n" }
+    if ($settings.Count -eq 1 -and $settings[0].Value.Trim() -eq $line) {
+        Write-Host 'psmux 默认 shell 已符合设置，无需修改。'
+        return
+    }
+    Install-ConfigFile '' $Path -Content $newText -Force
+    Write-Host "psmux 默认 shell 已设置为 $Shell；新服务启动后生效。不会自动关闭当前会话。"
+}
+function Add-ProxyProfileBlock {
+    param([string]$Path, [string]$HelperPath)
+    $text = if (Test-Path -LiteralPath $Path) { [IO.File]::ReadAllText($Path) } else { '' }
+    $begin = '# >>> windows-tools proxy >>>'
+    $end = '# <<< windows-tools proxy <<<'
+    $loader = ". '" + $HelperPath.Replace("'", "''") + "'"
+    $block = @"
+$begin
+# Preserve existing functions with the same names.
+if (-not (Get-Command proxy_on -ErrorAction SilentlyContinue) -and -not (Get-Command proxy_off -ErrorAction SilentlyContinue)) {
+    $loader
+}
+$end
+"@
+    $pattern = '(?ms)^' + [regex]::Escape($begin) + '\r?\n.*?^' + [regex]::Escape($end)
+    if ($text.Contains($begin) -xor $text.Contains($end)) { throw "Profile 标记不完整，请先检查：$Path" }
+    $newText = if ([regex]::IsMatch($text, $pattern)) {
+        [regex]::Replace($text, $pattern, [Text.RegularExpressions.MatchEvaluator]{ param($m) $block })
+    } else { $text.TrimEnd("`r", "`n") + "`r`n" + $block + "`r`n" }
+    # A BOM allows Windows PowerShell 5.1 to read existing Chinese profile text.
+    Install-ConfigFile '' $Path -Content ([string][char]0xFEFF + $newText) -Force
+}

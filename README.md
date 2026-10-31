@@ -20,6 +20,8 @@ Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
 3. 如果选了 Yazi 但找不到 `file.exe`，说明预览依赖缺失，询问是否额外安装 Git，**默认 N**。拒绝不会中止其余安装。
 4. 需要下载时才询问代理。回车使用 **127.0.0.1:17897**，也可输入其他地址；输入 `keep` 保留已有网络设置。
 5. 只下载缺少的软件，再检查配置。已经存在的全部软件不重新下载，也不自动升级。
+6. 选择 psmux 时检查默认 shell：缺失则补上 PowerShell，已有则显示设置并询问是否保留。
+7. 为 Windows PowerShell / PowerShell 7 的用户 profile 加载代理快捷函数，不自动开启代理。
 
 选择界面：
 
@@ -118,7 +120,46 @@ config/
 
 TOML/Lua 使用 UTF-8 无 BOM；PowerShell 脚本使用 UTF-8 带 BOM，以兼容 PowerShell 5.1 中文文件名。Vim 配置只包含通用编辑设置，没有照搬 Linux 依赖 `/dev/tty` 和 `base64` 的 Vim 剪贴板脚本。
 
-安装器不会修改 PowerShell profile、psmux 配置、终止现有 psmux 会话，也不安装 Linux 的 Zsh/Oh My Zsh/TPM/rsync/btop。文件传输使用 Windows `scp`。
+安装器会备份并合并 PowerShell profile，选择 psmux 时检查其默认 shell；不会终止现有 psmux 会话。也不安装 Linux 的 Zsh/Oh My Zsh/TPM/rsync/btop。文件传输使用 Windows `scp`。
+
+## psmux 默认 shell
+
+选择 psmux 时，检查 `%USERPROFILE%\.psmux.conf` 中直接写出的 `default-shell` 设置：
+
+- 没有：追加 `set -g default-shell powershell`，保留其他配置。
+- 已有：打印配置；回车/1 保留，2 改为 Windows PowerShell，3 改为 PowerShell 7（先检查 pwsh 存在）。
+- 修改前生成 `.bak-*` 备份；其他选项与注释保留。重复运行不重复追加。
+- `-NonInteractive` 下保留已有 shell，没有才新增。`-ForceConfig` 不绕过此保留规则。
+
+可以明确指定，跳过 shell 问题：
+
+```powershell
+.\install.ps1 psmux -ConfigureOnly -PsmuxShell powershell
+.\install.ps1 psmux -ConfigureOnly -PsmuxShell pwsh
+```
+
+只检查该文件里的直接设置，不解析被 source 的其他配置文件或复杂条件；自定义配置请检查最终生效结果。已有 psmux 服务不会自动切换。保存所有窗格工作后，手动 `psmux kill-server` 再启动；脚本不会替你结束会话。
+
+## proxy_on / proxy_off
+
+每次安装会部署 `%LOCALAPPDATA%\windows-tools\proxy.ps1`，并在 Windows PowerShell 和 PowerShell 7 的当前用户、所有宿主 profile 中追加带标记的加载块。已有 profile 内容保留，修改前备份。若 profile 中已有同名命令则保留，不覆盖；可自行处理命名冲突后加载本项目脚本。
+
+新开 PowerShell 即可使用；当前窗口立即加载：
+
+```powershell
+. "$env:LOCALAPPDATA\windows-tools\proxy.ps1"
+proxy_on                       # 使用安装时保存的地址，初始默认 127.0.0.1:17897
+proxy_on 127.0.0.1:7890         # 本次使用其他地址；不改已保存的默认地址
+proxy_off
+```
+
+- `proxy_on` 设置当前进程 HTTP_PROXY/HTTPS_PROXY、.NET 默认代理，并在 Scoop 可用时同步其持久 proxy 配置。
+- `proxy_off` 清除当前进程 HTTP_PROXY/HTTPS_PROXY/ALL_PROXY，禁用该进程的 .NET 默认代理，并将 Scoop proxy 设为 `none`。
+- 打开新 shell **只加载函数，不自动开启代理**。Scoop 配置独立持久保存；已有其他终端的环境变量不受影响。
+- 不修改 Windows 系统代理、Git 自己的 `http.proxy` 配置或任意第三方应用设置；不保证所有程序都遵循这些开关。已有 HTTP 客户端/会话可能保留其创建时的配置。
+- 使用 `-NoProfile` 的会话不自动加载函数，需手动 dot-source 上述文件。
+- 默认地址存于 `%LOCALAPPDATA%\windows-tools\proxy.json`。安装时明确提供/输入的代理会更新该地址并备份旧值；没有提供新代理时保留原值。
+- 可移除各 profile 的 `windows-tools proxy` 标记块来停止加载。`proxy_status` 未包含在本版本。
 
 ## 配置 Mac 传输（首次需要）
 
@@ -201,10 +242,11 @@ yazi
 ```powershell
 pwsh -NoProfile -File .\tests\test.ps1
 pwsh -NoProfile -File .\tests\selection.ps1
+pwsh -NoProfile -File .\tests\shell-proxy.ps1
 # Windows 上也可用 powershell.exe -NoProfile -File .\tests\test.ps1
 ```
 
-测试覆盖交互默认值/自定义输入/重试、命令行空格参数、已有命令/独立安装/Scoop 入口缺失检测，并解析全部 PowerShell 脚本，验证配置保留/备份/重复执行、代理输入、并发选择列表、中文/空格/单引号文件名和传输清理。psmux/scp 用测试替身；不联网、不安装软件、不传输真实文件。
+测试覆盖交互默认值/自定义输入/重试、命令行空格参数、已有命令/独立安装/Scoop 入口缺失检测，并解析全部 PowerShell 脚本，验证配置保留/备份/重复执行、代理输入、并发选择列表、中文/空格/单引号文件名和传输清理。另外验证 psmux shell 保留/修改/CRLF/备份、profile 合并/重复运行/保留同名函数、代理开关与 Scoop 同步。psmux/scp/Scoop 用测试替身；不联网、不安装软件、不传输真实文件。
 
 目前已在 macOS 的 PowerShell 7.4.6 上完成上述检查及 TOML 解析；**尚未完成真实 Windows 5.1、Scoop 安装、Yazi/psmux 交互和 Mac 剪贴板端到端测试**。第一次 Windows 安装请按上面的验收顺序执行。
 

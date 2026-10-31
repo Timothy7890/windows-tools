@@ -17,6 +17,7 @@ param(
     [switch]$NonInteractive,
     [switch]$ConfigureOnly,
     [switch]$ForceConfig,
+    [ValidateSet('powershell','pwsh')][string]$PsmuxShell,
     [ValidateSet('User','Machine')][string]$EnvironmentScope = 'User'
 )
 $ErrorActionPreference = 'Stop'
@@ -121,6 +122,30 @@ if ($ConfigureOnly) {
 
 Write-Host '[2/3] Configuration' -ForegroundColor Cyan
 $script:ConfigResults = @()
+if ($selected -contains 'psmux') {
+    Set-PsmuxShellConfig -Path (Join-Path $env:USERPROFILE '.psmux.conf') -NonInteractive:$NonInteractive -Shell $PsmuxShell
+}
+# Install proxy helpers for both Windows PowerShell and PowerShell 7, without enabling them.
+$helperDir = Join-Path $env:LOCALAPPDATA 'windows-tools'
+$helperPath = Join-Path $helperDir 'proxy.ps1'
+Install-ConfigFile (Join-Path $PSScriptRoot 'config\proxy.ps1') $helperPath -Force:$ForceConfig
+$settingsPath = Join-Path $helperDir 'proxy.json'
+$defaultProxy = if ($Proxy) { (ConvertTo-ProxyUri $Proxy).AbsoluteUri } else { 'http://127.0.0.1:17897' }
+if ($Proxy -or -not (Test-Path -LiteralPath $settingsPath)) {
+    $settings = ConvertTo-Json @{ address = $defaultProxy }
+    Install-ConfigFile '' $settingsPath -Content $settings -Force
+}
+$documents = [Environment]::GetFolderPath('MyDocuments')
+if (-not $documents) { throw '无法确定 Documents 目录，不能写 PowerShell profile。' }
+$profiles = @(
+    (Join-Path $documents 'WindowsPowerShell\profile.ps1'),
+    (Join-Path $documents 'PowerShell\profile.ps1'),
+    $PROFILE.CurrentUserAllHosts
+) | Select-Object -Unique
+foreach ($profilePath in $profiles) { Add-ProxyProfileBlock $profilePath $helperPath }
+Write-Host '已添加 proxy_on / proxy_off。新 PowerShell 会话自动加载函数，不会自动开启代理。'
+Write-Host "当前窗口可执行：. '$helperPath'"
+
 if ($selected -contains 'vim') {
     Install-ConfigFile (Join-Path $PSScriptRoot 'config\vimrc') (Join-Path $env:USERPROFILE '_vimrc') -Force:$ForceConfig
 }
