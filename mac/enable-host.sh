@@ -55,6 +55,6 @@ ssh() {
 BLOCK
 fi
 
-echo "已登记 $host：$relay"
+echo "已登记 ${host}：${relay}"
 echo "新开一个终端窗口后，直接运行：ssh $host"
 echo "iTerm 配置不读取 ~/.zshrc，Command 请改为：$HOME/.local/bin/ssh-conpty $host"

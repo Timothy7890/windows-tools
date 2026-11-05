@@ -263,4 +263,7 @@ if ($conptyReady) {
     Write-Host '残留修复还差 Mac 端一步，请在 Mac 的 windows-tools 目录运行：' -ForegroundColor Yellow
     Write-Host '  ./mac/enable-host.sh <这台机器的 SSH 别名>'
     Write-Host '已有 psmux 服务继续使用旧 ConPTY；保存工作后重新启动 psmux 才会用新版。'
+    Write-Host '重新连接后，复制下面的命令检查，应输出 ConPTY 目录：' -ForegroundColor Yellow
+    Write-Host '  $env:PSMUX_CONPTY_DIR'
+    Write-Host "  应输出：$conptyDir"
 }
