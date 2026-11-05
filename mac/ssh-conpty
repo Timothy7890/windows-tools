@@ -1,0 +1,59 @@
+#!/usr/bin/env python3
+"""ssh into a Windows 10 host through relay.exe (new OpenConsole) to avoid sshd's old conhost.
+Fixes leftover CJK/icon characters with psmux + yazi. Hosts are registered by enable-host.sh.
+Usage: ssh-conpty <host>   (ssh config forwards still apply)"""
+import fcntl, os, select, shutil, signal, struct, subprocess, sys, termios, tty
+
+HOSTS_DIR = os.path.expanduser("~/.config/ssh-conpty/hosts")
+
+def size():
+    try:
+        r, c = struct.unpack("HHHH", fcntl.ioctl(0, termios.TIOCGWINSZ, b"\0" * 8))[:2]
+        if r and c:
+            return c, r
+    except OSError:
+        pass
+    s = shutil.get_terminal_size()
+    return s.columns, s.lines
+
+def main():
+    if len(sys.argv) != 2:
+        sys.exit("usage: ssh-conpty <host>")
+    host = sys.argv[1]
+    try:
+        with open(os.path.join(HOSTS_DIR, host)) as f:
+            relay = f.read().strip()
+    except OSError:
+        sys.exit(f"{host} is not registered; run mac/enable-host.sh {host}")
+    c, r = size()
+    p = subprocess.Popen(
+        ["ssh", "-T", "-o", "RequestTTY=no", "-o", "RemoteCommand=none", host,
+         f"{relay} {c} {r} powershell.exe"],
+        stdin=subprocess.PIPE, bufsize=0)
+    old = termios.tcgetattr(0)
+    rd, wr = os.pipe()
+    os.set_blocking(wr, False)
+    signal.signal(signal.SIGWINCH, lambda *_: os.write(wr, b"x"))
+    try:
+        tty.setraw(0)
+        while p.poll() is None:
+            ready = select.select([0, rd], [], [], 0.5)[0]
+            if rd in ready:
+                os.read(rd, 64)
+                c, r = size()
+                p.stdin.write(f"\x1b]7719;{c};{r}\x07".encode())
+            if 0 in ready:
+                d = os.read(0, 8192)
+                if not d:
+                    break
+                p.stdin.write(d)
+    except BrokenPipeError:
+        pass
+    finally:
+        termios.tcsetattr(0, termios.TCSADRAIN, old)
+        sys.stdout.write("\x1b[?1049l\x1b[?9001l\x1b[?1004l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?2004l\x1b[?25h\x1b[0m\r\n")
+        sys.stdout.flush()
+        p.terminate()
+
+if __name__ == "__main__":
+    main()

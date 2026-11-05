@@ -13,7 +13,7 @@
 
 - [快速开始](#quick-start) · [命令行用法](#cli)
 - **[扩展 Shift+R 传输目标](#transfer-targets)** · [首次连接 Mac](#mac-ssh)
-- [Yazi 配置与快捷键](#yazi) · [psmux 默认 shell](#psmux-shell) · [代理开关](#proxy)
+- [Yazi 配置与快捷键](#yazi) · [psmux 默认 shell](#psmux-shell) · [Windows 10 残留修复](#win10-residue) · [代理开关](#proxy)
 - [启动与验收](#verify) · [更新与回滚](#maintenance)
 - [检测、权限与配置保留](#behavior) · [开发验证](#development)
 
@@ -291,6 +291,58 @@ TOML/Lua 使用 UTF-8 无 BOM；PowerShell 脚本使用 UTF-8 带 BOM，以兼�
 
 只检查该文件里的直接设置，不解析被 source 的其他配置文件或复杂条件；自定义配置请检查最终生效结果。已有 psmux 服务不会自动切换。保存所有窗格工作后，手动 `psmux kill-server` 再启动；脚本不会替你结束会话。
 
+<a id="win10-residue"></a>
+
+## Windows 10 残留修复
+
+**现象：** 在 Windows 10 上通过 SSH 使用 psmux + Yazi，移动后屏幕残留中文、图标或文件名的个别字符。`capture-pane` 看不到这些残留。
+
+**原因：** 残留由 Windows 10 自带的 conhost（19041）写入屏幕，位置在 psmux 和 sshd 之间。Windows 11 没有这个现象。
+
+### Windows 端（自动）
+
+选择 psmux 且 build 小于 22000 时，安装器自动：
+
+1. 下载 `Microsoft.Windows.Console.ConPTY`（需要时询问代理），校验 SHA256 和微软签名。
+2. 安装到 `%LOCALAPPDATA%\psmux-conpty\<版本>\`，并编译 `relay.exe`（使用系统自带的 `csc.exe`）。
+3. 设置环境变量 `PSMUX_CONPTY_DIR`，让新启动的 psmux 服务窗格使用新版 ConPTY。
+4. 发现 profile 把 `psmux` 重定向到 3.3.8 兼容入口时询问是否移除（默认移除，先备份）；非交互模式只提示。
+
+```powershell
+.\install.ps1 psmux -Proxy 127.0.0.1:17897   # Windows 10 自动部署
+.\install.ps1 psmux -ConPtyFix               # 强制部署（Windows 11 上也执行）
+.\install.ps1 psmux -SkipConPtyFix           # 跳过
+```
+
+下载或编译失败时只提示，其他配置继续。已有 psmux 服务继续使用旧 ConPTY，脚本不会结束会话。
+
+### Mac 端（每台机器登记一次）
+
+Windows 端无法绕开 sshd 的 conhost，还需要客户端配合。在 Mac 上运行：
+
+```bash
+./mac/enable-host.sh <SSH 别名>
+```
+
+脚本会安装 `~/.local/bin/ssh-conpty`，把 relay 路径登记到 `~/.config/ssh-conpty/hosts/`，并在 `~/.zshrc` 加入带标记的 `ssh()` 函数（先备份）。
+
+之后在终端照常运行 `ssh <别名>`。只有不带其他参数时才走修复链路；`ssh <别名> 命令`、`scp`、`rsync` 仍是原版 ssh。iTerm 配置不读取 `~/.zshrc`，Command 需要写成 `~/.local/bin/ssh-conpty` 的完整路径。
+
+### 验收
+
+重新连接后，下面的命令应输出 ConPTY 目录。然后新开一个 psmux 服务，在含中文文件名的目录运行 Yazi，移动后退出，确认没有残留：
+
+```powershell
+$env:PSMUX_CONPTY_DIR
+psmux -L main new -A -s main
+```
+
+### 限制与回滚
+
+- 从手机、其他电脑等未登记的客户端用普通 ssh 连接时，外层仍是旧 conhost，残留依然存在。彻底解决需要升级到 Windows 11。
+- 停用某台机器：删除 Mac 上的 `~/.config/ssh-conpty/hosts/<别名>`。
+- 移除 Windows 端：`[Environment]::SetEnvironmentVariable('PSMUX_CONPTY_DIR', $null, 'User')`，再删除 `%LOCALAPPDATA%\psmux-conpty`。Mac 端移除 `~/.zshrc` 中的 `windows-tools ssh-conpty` 标记块。
+
 <a id="proxy"></a>
 
 ## 代理开关
@@ -431,6 +483,7 @@ pwsh -NoProfile -File .\tests\test.ps1
 pwsh -NoProfile -File .\tests\selection.ps1
 pwsh -NoProfile -File .\tests\shell-proxy.ps1
 pwsh -NoProfile -File .\tests\ssh.ps1
+pwsh -NoProfile -File .\tests\conpty.ps1
 # Windows 上也可用 powershell.exe -NoProfile -File .\tests\test.ps1
 ```
 

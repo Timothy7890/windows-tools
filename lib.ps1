@@ -301,3 +301,116 @@ Host $Alias
     }
     Write-Host "连接准备好后测试：ssh $Alias echo ok"
 }
+
+
+# Windows 10's inbox conhost corrupts wide characters between psmux and sshd. The fix side-loads
+# Microsoft's ConPTY package: see "Windows 10 残留修复" in README.md.
+$script:ConPtyVersion = '1.25.260930003'
+$script:ConPtySha256 = '02B07B349AF66D801159BDF9E440D4A1CE78BB951F37FC8609731665AFDAE7EE'
+function Get-WindowsBuild {
+    # ProductName still says "Windows 10" on Windows 11, so only the build number is reliable.
+    return [int](Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').CurrentBuild
+}
+function Test-ConPtyFixNeeded {
+    param([int]$Build, [switch]$PsmuxSelected, [switch]$Force, [switch]$Skip)
+    if ($Skip) { return $false }
+    if ($Force) { return $true }
+    return ($PsmuxSelected -and $Build -lt 22000)
+}
+function Get-ConPtyArch {
+    param([string]$Architecture = $(if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }))
+    switch ($Architecture) {
+        'AMD64' { return [pscustomobject]@{ Name = 'x64'; Framework = 'Framework64' } }
+        'x86' { return [pscustomobject]@{ Name = 'x86'; Framework = 'Framework' } }
+        default { throw "暂不支持的 CPU 架构：$Architecture" }
+    }
+}
+function Test-MicrosoftSigned {
+    param([string]$Path)
+    $signature = Get-AuthenticodeSignature -LiteralPath $Path
+    return ($signature.Status -eq 'Valid' -and $signature.SignerCertificate.Subject -match 'O=Microsoft Corporation')
+}
+function Test-ConPtyFilesReady {
+    param([string]$Directory)
+    foreach ($name in @('conpty.dll','OpenConsole.exe')) {
+        $path = Join-Path $Directory $name
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf) -or -not (Test-MicrosoftSigned $path)) { return $false }
+    }
+    return $true
+}
+function Install-ConPtyFiles {
+    param([string]$Directory, [object]$Arch, [string]$Proxy)
+    $id = [guid]::NewGuid().ToString('N')
+    $archive = "$Directory-$id.zip"
+    $extracted = "$Directory-$id"
+    $url = "https://api.nuget.org/v3-flatcontainer/microsoft.windows.console.conpty/$script:ConPtyVersion/microsoft.windows.console.conpty.$script:ConPtyVersion.nupkg"
+    $null = New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Directory)
+    $progress = $ProgressPreference
+    try {
+        $ProgressPreference = 'SilentlyContinue'
+        [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+        $request = @{ Uri = $url; OutFile = $archive; UseBasicParsing = $true; ErrorAction = 'Stop' }
+        if ($Proxy) { $request.Proxy = (ConvertTo-ProxyUri $Proxy).AbsoluteUri }
+        Invoke-WebRequest @request
+        $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash
+        if ($hash -ne $script:ConPtySha256) { throw "ConPTY 安装包校验失败：$hash" }
+        Expand-Archive -LiteralPath $archive -DestinationPath $extracted -Force
+        $files = @(
+            (Join-Path $extracted "runtimes\win-$($Arch.Name)\native\conpty.dll"),
+            (Join-Path $extracted "build\native\runtimes\$($Arch.Name)\OpenConsole.exe")
+        )
+        foreach ($file in $files) {
+            if (-not (Test-MicrosoftSigned $file)) { throw "文件没有有效的微软签名：$file" }
+        }
+        $null = New-Item -ItemType Directory -Force -Path $Directory
+        Copy-Item -LiteralPath $files -Destination $Directory -Force
+    } finally {
+        $ProgressPreference = $progress
+        Remove-Item -LiteralPath $archive -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $extracted -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+function Build-ConPtyRelay {
+    param([string]$Source, [string]$Directory, [object]$Arch)
+    $relay = Join-Path $Directory 'relay.exe'
+    $stamp = Join-Path $Directory 'relay.source.sha256'
+    $hash = (Get-FileHash -LiteralPath $Source -Algorithm SHA256).Hash
+    if ((Test-Path -LiteralPath $relay) -and (Test-Path -LiteralPath $stamp) -and ((Get-Content -LiteralPath $stamp -Raw).Trim() -eq $hash)) {
+        return 'Unchanged'
+    }
+    $csc = Join-Path $env:WINDIR "Microsoft.NET\$($Arch.Framework)\v4.0.30319\csc.exe"
+    if (-not (Test-Path -LiteralPath $csc)) { throw "未找到 .NET Framework 编译器：$csc" }
+    $output = Join-Path $Directory ('relay-' + [guid]::NewGuid().ToString('N') + '.exe')
+    try {
+        # Windows PowerShell turns stderr from native commands into errors when redirected under 'Stop'.
+        $previous = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        $log = & $csc /nologo /optimize "/platform:$($Arch.Name)" "/out:$output" $Source 2>&1
+        $exit = $LASTEXITCODE
+        $ErrorActionPreference = $previous
+        if ($exit -ne 0) { throw "relay 编译失败：$($log -join ' ')" }
+        # A running relay locks the old file; the caller reports this and the old relay keeps working.
+        Move-Item -LiteralPath $output -Destination $relay -Force
+        [IO.File]::WriteAllText($stamp, $hash)
+    } finally {
+        Remove-Item -LiteralPath $output -Force -ErrorAction SilentlyContinue
+    }
+    return 'Built'
+}
+$script:PsmuxCompatPattern = '(?ms)^[ \t]*# Explicit Windows 10 SSH compatibility entry.*?^function global:psmux \{\s*psmux-safe @args\s*\}[ \t]*(?:\r?\n)?'
+function Test-PsmuxCompatProfileBlock {
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
+    return [regex]::IsMatch([IO.File]::ReadAllText($Path), $script:PsmuxCompatPattern)
+}
+function Remove-PsmuxCompatProfileBlock {
+    param([string]$Path)
+    $text = [regex]::Replace([IO.File]::ReadAllText($Path), $script:PsmuxCompatPattern, '')
+    # Keep the BOM so Windows PowerShell 5.1 still reads Chinese profile text.
+    Install-ConfigFile '' $Path -Content ([string][char]0xFEFF + $text) -Force
+}
+function Test-PsmuxProfileOverride {
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
+    return [regex]::IsMatch([IO.File]::ReadAllText($Path), '(?mi)^[ \t]*(?:function[ \t]+(?:global:)?psmux\b|(?:Set|New)-Alias\b.*\bpsmux\b)')
+}

@@ -18,7 +18,9 @@ param(
     [switch]$ConfigureOnly,
     [switch]$ForceConfig,
     [ValidateSet('powershell','pwsh')][string]$PsmuxShell,
-    [ValidateSet('User','Machine')][string]$EnvironmentScope = 'User'
+    [ValidateSet('User','Machine')][string]$EnvironmentScope = 'User',
+    [switch]$ConPtyFix,
+    [switch]$SkipConPtyFix
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'lib.ps1')
@@ -68,6 +70,7 @@ if ($selected -contains 'yazi' -and -not (Find-YaziFileExe $scoopRoot) -and $sel
 }
 $toInstall = @($states | Where-Object State -eq 'Missing' | ForEach-Object Name)
 $toRepair = @($states | Where-Object State -eq 'ScoopInstalled' | ForEach-Object Name)
+$proxyDecided = $PSBoundParameters.ContainsKey('Proxy')
 if ($ConfigureOnly) {
     Write-Host '仅配置模式：不下载软件、不修复 Scoop 入口、不修改代理。'
 } elseif ($toInstall.Count -or $toRepair.Count) {
@@ -82,6 +85,7 @@ if ($ConfigureOnly) {
     }
     if (($toInstall.Count -or $needBootstrap) -and -not $PSBoundParameters.ContainsKey('Proxy') -and -not $NonInteractive) {
         $Proxy = Read-ProxyAddress
+        $proxyDecided = $true
     }
     if ($Proxy) {
         $proxyUri = ConvertTo-ProxyUri $Proxy
@@ -152,6 +156,51 @@ foreach ($profilePath in $profiles) { Add-ProxyProfileBlock $profilePath $helper
 Write-Host '已添加 proxy_on / proxy_off。新 PowerShell 会话自动加载函数，不会自动开启代理。'
 Write-Host "当前窗口可执行：. '$helperPath'"
 
+$conptyReady = $false
+$windowsBuild = Get-WindowsBuild
+if (Test-ConPtyFixNeeded -Build $windowsBuild -PsmuxSelected:($selected -contains 'psmux') -Force:$ConPtyFix -Skip:$SkipConPtyFix) {
+    Write-Host "Windows build $windowsBuild：部署 psmux 残留修复（新版 ConPTY）。" -ForegroundColor Cyan
+    try {
+        $conptyArch = Get-ConPtyArch
+        $conptyDir = Join-Path $env:LOCALAPPDATA "psmux-conpty\$script:ConPtyVersion"
+        if (Test-ConPtyFilesReady $conptyDir) {
+            Write-Host "[已存在，跳过下载] ConPTY：$conptyDir" -ForegroundColor Green
+        } elseif ($ConfigureOnly) {
+            throw '仅配置模式不下载 ConPTY；去掉 -ConfigureOnly 后重新运行。'
+        } else {
+            if (-not $proxyDecided -and -not $NonInteractive) {
+                $Proxy = Read-ProxyAddress
+                $proxyDecided = $true
+            }
+            Install-ConPtyFiles -Directory $conptyDir -Arch $conptyArch -Proxy $Proxy
+            Write-Host "已安装 ConPTY $script:ConPtyVersion（微软签名已校验）：$conptyDir"
+        }
+        $relayResult = Build-ConPtyRelay -Source (Join-Path $PSScriptRoot 'config\conpty\relay.cs') -Directory $conptyDir -Arch $conptyArch
+        Write-Host "relay.exe：$relayResult"
+        $env:PSMUX_CONPTY_DIR = $conptyDir
+        [Environment]::SetEnvironmentVariable('PSMUX_CONPTY_DIR', $conptyDir, $EnvironmentScope)
+        Write-Host "PSMUX_CONPTY_DIR ($EnvironmentScope)：$conptyDir"
+        $conptyReady = $true
+    } catch {
+        Write-Warning "psmux 残留修复未完成，其余配置继续：$_"
+    }
+    # A profile function named psmux would bypass the version this fix was verified with.
+    foreach ($profilePath in @($profiles + $PROFILE.CurrentUserCurrentHost | Select-Object -Unique)) {
+        if (Test-PsmuxCompatProfileBlock $profilePath) {
+            Write-Warning "$profilePath 把 psmux 重定向到了 psmux-3.3.8 兼容入口。"
+            $removeCompat = -not $NonInteractive -and (Read-Host '是否移除这段 profile（会先备份）？[Y/n]').Trim() -notmatch '^(n|no)$'
+            if ($removeCompat) {
+                Remove-PsmuxCompatProfileBlock $profilePath
+                Write-Host '已移除；新开的 PowerShell 将使用 Scoop 的 psmux。'
+            }
+        } elseif (Test-PsmuxProfileOverride $profilePath) {
+            Write-Warning "$profilePath 自定义了 psmux 命令，可能绕过本修复；请自行确认。"
+        }
+    }
+} elseif ($selected -contains 'psmux' -and -not $SkipConPtyFix) {
+    Write-Host "Windows build $windowsBuild：不需要 psmux 残留修复。如需强制部署，请加 -ConPtyFix。"
+}
+
 if ($selected -contains 'vim') {
     Install-ConfigFile (Join-Path $PSScriptRoot 'config\vimrc') (Join-Path $env:USERPROFILE '_vimrc') -Force:$ForceConfig
 }
@@ -210,3 +259,8 @@ if ($selected -contains 'yazi') {
 Write-Host '安装与配置步骤完成。上面的待补依赖/保留配置提示如存在，请按需处理。' -ForegroundColor Green
 Write-Host 'Existing psmux sessions keep old environment values. Save work before restarting them.'
 Write-Host 'Mac 传输还需远端公钥授权及反向转发；本地 SSH 配置结果见上方。详见 README.md。'
+if ($conptyReady) {
+    Write-Host '残留修复还差 Mac 端一步，请在 Mac 的 windows-tools 目录运行：' -ForegroundColor Yellow
+    Write-Host '  ./mac/enable-host.sh <这台机器的 SSH 别名>'
+    Write-Host '已有 psmux 服务继续使用旧 ConPTY；保存工作后重新启动 psmux 才会用新版。'
+}
