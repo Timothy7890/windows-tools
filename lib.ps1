@@ -49,31 +49,55 @@ function Install-ConfigFile {
 
 function Resolve-Components {
     param([string[]]$Names)
-    $allowed = @('vim','psmux','yazi','chafa','git','lazygit')
+    $allowed = @('vim','psmux','yazi','chafa','git','lazygit','btop-gpu','btop')
     $result = @()
     foreach ($value in $Names) {
         foreach ($name in ($value -split '[,\s]+')) {
             if (-not $name) { continue }
             $name = $name.ToLowerInvariant()
-            if ($allowed -notcontains $name) { throw "未知软件：$name。可选：$($allowed -join ', ')" }
+            # btop-gpu is the menu name; btop-lhm is the Scoop package that provides it.
+            if ($name -eq 'btop-gpu') { $name = 'btop-lhm' }
+            if ($allowed -notcontains $name -and $name -ne 'btop-lhm') { throw "未知软件：$name。可选：$($allowed -join ', ')" }
             if ($result -notcontains $name) { $result += $name }
         }
+    }
+    # Both packages provide the btop command; the GPU build wins when both are chosen.
+    if ($result -contains 'btop-lhm' -and $result -contains 'btop') {
+        Write-Warning 'btop-gpu 与 btop 只能二选一，已保留 btop-gpu（显卡版）。'
+        $result = @($result | Where-Object { $_ -ne 'btop' })
     }
     if (-not $result.Count) { throw '至少选择一个软件。' }
     return $result
 }
+function Get-ComponentCommand {
+    param([string]$Name)
+    if ($Name -eq 'btop-lhm') { return 'btop' }
+    return $Name
+}
+function Read-BtopFallback {
+    # Returns the package to install instead of btop-lhm, or '' to skip btop.
+    Write-Warning '当前终端没有管理员权限：btop-gpu（显卡版 btop-lhm）必须以管理员身份运行，否则无法启动。'
+    while ($true) {
+        $answer = (Read-Host '需要改装低权限的普通版 btop（不显示显卡和 CPU 温度），是否继续？[Y/n]').Trim()
+        if (-not $answer -or $answer -match '^(y|yes)$') { return 'btop' }
+        if ($answer -match '^(n|no)$') { return '' }
+        Write-Warning '请输入 y 或 n。'
+    }
+}
 function Read-Components {
     Write-Host '请选择软件（回车使用默认；输入编号或名称，空格分隔）：' -ForegroundColor Cyan
     Write-Host '  1 vim [默认]   2 psmux [默认]   3 yazi [默认]   4 chafa [默认]'
-    Write-Host '  5 git [可选]   6 lazygit [可选]   all 全部   q 退出'
-    $names = @('vim','psmux','yazi','chafa','git','lazygit')
+    Write-Host '  5 git [可选]   6 lazygit [可选]'
+    Write-Host '  7 btop-gpu [可选，含显卡监控，需管理员]   8 btop [可选，普通版，无需管理员]'
+    Write-Host '  all 全部（btop 使用显卡版）   q 退出'
+    $names = @('vim','psmux','yazi','chafa','git','lazygit','btop-gpu','btop')
     while ($true) {
         $answer = (Read-Host '软件').Trim()
         if (-not $answer) { return @('vim','psmux','yazi','chafa') }
         if ($answer -eq 'q') { throw '用户取消安装。' }
-        if ($answer -eq 'all') { return $names }
+        if ($answer -eq 'all') { $answer = $names -join ' ' }
         $mapped = @($answer -split '[,\s]+' | ForEach-Object {
-            if ($_ -match '^[1-6]$') { $names[[int]$_ - 1] } else { $_ }
+            if ($_ -match '^[1-8]$') { $names[[int]$_ - 1] } else { $_ }
         })
         try { return @(Resolve-Components $mapped) } catch { Write-Warning $_ }
     }
@@ -88,6 +112,16 @@ function Read-ProxyAddress {
 }
 function Get-ToolState {
     param([string]$Name, [string]$ScoopRoot)
+    if ($Name -eq 'btop-lhm') {
+        # A btop command alone may be the plain build, so trust only the Scoop package directory.
+        $current = Join-Path $ScoopRoot 'apps\btop-lhm\current'
+        if (-not (Test-Path -LiteralPath (Join-Path $current 'manifest.json'))) {
+            return [pscustomobject]@{ Name = $Name; State = 'Missing'; Path = ''; AddToPath = $false }
+        }
+        $command = Get-Command btop -CommandType Application,ExternalScript -ErrorAction SilentlyContinue
+        $state = if ($command) { 'Present' } else { 'ScoopInstalled' }
+        return [pscustomobject]@{ Name = $Name; State = $state; Path = $current; AddToPath = $false }
+    }
     $commands = @(Get-Command $Name -CommandType Application,ExternalScript -All -ErrorAction SilentlyContinue)
     if ($commands.Count) {
         return [pscustomobject]@{ Name = $Name; State = 'Present'; Path = $commands[0].Source; AddToPath = $false }

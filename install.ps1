@@ -36,6 +36,16 @@ $selected = if ($Components) {
 } else {
     @(Read-Components)
 }
+if ($selected -contains 'btop-lhm' -and -not $isAdmin) {
+    $fallback = if ($NonInteractive) {
+        Write-Warning '当前终端没有管理员权限，btop-gpu 无法运行；无交互模式自动改装普通版 btop。'
+        'btop'
+    } else { Read-BtopFallback }
+    $selected = @($selected | ForEach-Object { if ($_ -eq 'btop-lhm') { $fallback } else { $_ } } | Where-Object { $_ })
+    if ($fallback) { Write-Host '已改为普通版 btop。需要显卡监控时，请在管理员终端重新运行：.\install.ps1 btop-gpu' -ForegroundColor Yellow }
+    else { Write-Host '已跳过 btop。需要显卡监控时，请在管理员终端重新运行：.\install.ps1 btop-gpu' -ForegroundColor Yellow }
+    if (-not $selected.Count) { Write-Host '没有剩余要安装的软件，退出。'; return }
+}
 $scoopRoot = if ($env:SCOOP) { $env:SCOOP } else { Join-Path $env:USERPROFILE 'scoop' }
 $shims = Join-Path $scoopRoot 'shims'
 if (Test-Path -LiteralPath $shims) { $env:PATH = "$shims;$env:PATH" }
@@ -66,6 +76,22 @@ if ($selected -contains 'yazi' -and -not (Find-YaziFileExe $scoopRoot) -and $sel
             Write-Host "Git：$($gitState.State) $($gitState.Path)"
             if ($gitState.AddToPath) { $env:PATH = (Split-Path $gitState.Path -Parent) + ';' + $env:PATH }
         }
+    }
+}
+# The plain and GPU btop packages share the btop shim, so only one may stay installed.
+$removePlainBtop = $false
+if (($states | Where-Object { $_.Name -eq 'btop-lhm' -and $_.State -eq 'Missing' }) -and -not $ConfigureOnly) {
+    $plainBtop = Join-Path $scoopRoot 'apps\btop\current\manifest.json'
+    if (Test-Path -LiteralPath $plainBtop) {
+        Write-Host '检测到 Scoop 普通版 btop；换成 btop-gpu 需先卸载它（btop.conf 保留在 Scoop persist 目录）。' -ForegroundColor Yellow
+        $removePlainBtop = (-not $NonInteractive) -and ((Read-Host '是否卸载普通版并改装 btop-gpu？[Y/n]').Trim() -notmatch '^(n|no)$')
+        if (-not $removePlainBtop) {
+            Write-Warning '保留普通版 btop，跳过 btop-gpu。'
+            $selected = @($selected | Where-Object { $_ -ne 'btop-lhm' })
+            $states = @($states | Where-Object { $_.Name -ne 'btop-lhm' })
+        }
+    } elseif (Get-Command btop -CommandType Application,ExternalScript -ErrorAction SilentlyContinue) {
+        Write-Warning "已有非 Scoop 安装的 btop：$((Get-Command btop).Source)。安装 btop-gpu 后，PATH 中靠前的那个生效。"
     }
 }
 $toInstall = @($states | Where-Object State -eq 'Missing' | ForEach-Object Name)
@@ -121,6 +147,10 @@ if ($ConfigureOnly) {
     foreach ($name in $toRepair) {
         Write-Host "修复 Scoop 命令入口：$name"
         Invoke-ScoopChecked @('reset', $name)
+    }
+    if ($removePlainBtop) {
+        Write-Host '卸载普通版 btop'
+        Invoke-ScoopChecked @('uninstall', 'btop')
     }
     if ($toInstall.Count) {
         Write-Host "本次只安装：$($toInstall -join ', ')"
@@ -240,7 +270,7 @@ if ($selected -contains 'yazi') {
 Write-Host '[3/3] Verify commands' -ForegroundColor Cyan
 $missing = @()
 foreach ($name in $selected) {
-    $command = Get-Command $name -CommandType Application,ExternalScript -ErrorAction SilentlyContinue
+    $command = Get-Command (Get-ComponentCommand $name) -CommandType Application,ExternalScript -ErrorAction SilentlyContinue
     if ($command) { Write-Host ("{0}: {1}" -f $name, $command.Source) }
     else { $missing += $name; Write-Warning "Not found in PATH: $name" }
 }
@@ -249,6 +279,20 @@ if ($selected -contains 'yazi' -and -not (Get-Command scp -ErrorAction SilentlyC
 }
 $script:ConfigResults | ForEach-Object { Write-Host $_ }
 if ($missing.Count) { throw "Incomplete installation; missing commands: $($missing -join ', ')" }
+if ($selected -contains 'btop' -or $selected -contains 'btop-lhm') {
+    # btop4win only ships x64 builds and links against the Visual C++ 2015-2022 runtime.
+    $system32 = Join-Path $env:WINDIR 'System32'
+    if (-not ((Test-Path -LiteralPath (Join-Path $system32 'vcruntime140.dll')) -and (Test-Path -LiteralPath (Join-Path $system32 'msvcp140.dll')))) {
+        Write-Warning '未检测到 Visual C++ 2015-2022 运行库，btop 可能无法启动。可执行：scoop bucket add extras; scoop install vcredist2022'
+    }
+    if ($env:PROCESSOR_ARCHITECTURE -ne 'AMD64' -and $env:PROCESSOR_ARCHITEW6432 -ne 'AMD64') {
+        Write-Warning 'btop4win 只提供 x64 版本；ARM64 设备需依赖 Windows 11 的 x64 仿真。'
+    }
+    if ($selected -contains 'btop-lhm') {
+        Write-Host 'btop-gpu：请在管理员终端运行 btop。首次运行会注册传感器驱动服务 R0btop（WinRing0）；' -ForegroundColor Yellow
+        Write-Host '  若杀毒软件拦截或显卡数据为空，可换回普通版：scoop uninstall btop-lhm; .\install.ps1 btop' -ForegroundColor Yellow
+    }
+}
 if ($selected -contains 'yazi') {
     foreach ($optional in @('vim','psmux','chafa')) {
         if (-not (Get-Command $optional -CommandType Application,ExternalScript -ErrorAction SilentlyContinue)) {

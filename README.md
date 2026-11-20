@@ -2,7 +2,7 @@
 
 **为 Windows / SSH 终端准备的交互式工具安装与配置包。**
 
-默认安装 **Vim · psmux · Yazi · chafa**，Git / lazygit 按需选择。参考 `linux-tools` 的使用方式，通过 Scoop 安装缺少的软件，并保留已有配置。
+默认安装 **Vim · psmux · Yazi · chafa**，Git / lazygit / btop（显卡版或普通版）按需选择。参考 `linux-tools` 的使用方式，通过 Scoop 安装缺少的软件，并保留已有配置。
 
 **运行环境：** Windows PowerShell 5.1 / PowerShell 7  ·  **默认代理：** `127.0.0.1:17897`
 
@@ -39,7 +39,7 @@ Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
 
 
 
-1. 选择软件。直接回车默认 **vim、psmux、yazi、chafa**；Git 和 lazygit 默认不选。
+1. 选择软件。直接回车默认 **vim、psmux、yazi、chafa**；Git、lazygit 和 btop 默认不选。
 2. 检测已有软件，显示路径以及“已存在，跳过下载”“待安装”或“已安装，待修复命令入口”。
 3. 如果选了 Yazi 但找不到 `file.exe`，说明预览依赖缺失，询问是否额外安装 Git，**默认 N**。拒绝不会中止其余安装。
 4. 需要下载时才询问代理。回车使用 **127.0.0.1:17897**，也可输入其他地址；输入 `keep` 保留已有网络设置。
@@ -54,7 +54,9 @@ Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
 
 ```text
 1 vim [默认]   2 psmux [默认]   3 yazi [默认]   4 chafa [默认]
-5 git [可选]   6 lazygit [可选]   all 全部   q 退出
+5 git [可选]   6 lazygit [可选]
+7 btop-gpu [可选，含显卡监控，需管理员]   8 btop [可选，普通版，无需管理员]
+all 全部（btop 使用显卡版）   q 退出
 ```
 
 可以输入 `1 2`、`vim yazi chafa` 或 `all`。输入有误会提示并重新询问。
@@ -70,8 +72,10 @@ Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
 # 同时指定代理；省略时按需询问
 .\install.ps1 vim psmux yazi chafa -Proxy 127.0.0.1:17897
 
-# Git / lazygit 明确选中才安装
+# Git / lazygit / btop 明确选中才安装
 .\install.ps1 git lazygit
+.\install.ps1 btop-gpu   # 显卡版（Scoop 包 btop-lhm），需管理员
+.\install.ps1 btop       # 普通版，无显卡监控
 
 # 仍兼容具名数组参数
 .\install.ps1 -Components vim,psmux -Proxy http://127.0.0.1:17897
@@ -269,7 +273,14 @@ config/
 
 TOML/Lua 使用 UTF-8 无 BOM；PowerShell 脚本使用 UTF-8 带 BOM，以兼容 PowerShell 5.1 中文文件名。Vim 配置只包含通用编辑设置，没有照搬 Linux 依赖 `/dev/tty` 和 `base64` 的 Vim 剪贴板脚本。
 
-安装器会备份并合并 PowerShell profile，选择 psmux 时检查其默认 shell；不会终止现有 psmux 会话。也不安装 Linux 的 Zsh/Oh My Zsh/TPM/rsync/btop。文件传输使用 Windows `scp`。
+安装器会备份并合并 PowerShell profile，选择 psmux 时检查其默认 shell；不会终止现有 psmux 会话。也不安装 Linux 的 Zsh/Oh My Zsh/TPM/rsync。btop 可选安装，使用 Scoop main 中的 Windows 移植版 [btop4win](https://github.com/aristocratos/btop4win)，两个版本命令都是 `btop`，只能装一个：
+
+- `btop-gpu`（Scoop 包 `btop-lhm`）：内置 LibreHardwareMonitor，显示显卡占用/温度/显存和 CPU 温度，无需按显卡编译。**必须以管理员身份运行**；首次运行注册驱动服务 `R0btop`（WinRing0），可能被杀毒软件拦截。
+- `btop`：普通版，无需管理员，不显示显卡和 CPU 温度。
+- 同时选两者（含 `all`）时只装 `btop-gpu`。
+- 选 `btop-gpu` 但当前终端不是管理员：提示是否改装普通版，回车改装，`n` 跳过 btop；`-NonInteractive` 下自动改装普通版。检查方法：`([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)` 输出 `True` 即为管理员。
+- 已用 Scoop 装了普通版再选 `btop-gpu`：询问后卸载普通版再安装（`btop.conf` 保留）。
+- 两者都只有 x64 版本，需要 Visual C++ 2015-2022 运行库（缺失时安装器会提示 `scoop install extras/vcredist2022`）。文件传输使用 Windows `scp`。
 
 <a id="psmux-shell"></a>
 

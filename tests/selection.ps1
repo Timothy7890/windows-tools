@@ -19,6 +19,18 @@ Answers @('vim,chafa')
 Assert (((Read-Components) -join ',') -eq 'vim,chafa') 'Name selection failed'
 Answers @('bad','2')
 Assert (((Read-Components) -join ',') -eq 'psmux') 'Invalid selection did not retry'
+Answers @('7')
+Assert (((Read-Components) -join ',') -eq 'btop-lhm') 'btop-gpu number selection failed'
+Answers @('8')
+Assert (((Read-Components) -join ',') -eq 'btop') 'btop number selection failed'
+Answers @('all')
+Assert (((Read-Components) -join ',') -eq 'vim,psmux,yazi,chafa,git,lazygit,btop-lhm') 'all selection should use btop-gpu only'
+Answers @('')
+Assert ((Read-BtopFallback) -eq 'btop') 'Non-admin fallback default should be plain btop'
+Answers @('n')
+Assert ((Read-BtopFallback) -eq '') 'Declining fallback should skip btop'
+Answers @('maybe','y')
+Assert ((Read-BtopFallback) -eq 'btop') 'Invalid fallback answer did not retry'
 Answers @('')
 Assert ((Read-ProxyAddress) -eq 'http://127.0.0.1:17897/') 'Wrong default proxy'
 Answers @('http://localhost:9999')
@@ -29,6 +41,10 @@ Answers @('socks5://localhost:1234','localhost:8888')
 Assert ((Read-ProxyAddress) -eq 'http://localhost:8888/') 'Invalid proxy did not retry'
 Assert (((Resolve-Components @('yazi')) -join ',') -eq 'yazi') 'Yazi added unwanted packages'
 Assert (((Resolve-Components @('vim','VIM','psmux')) -join ',') -eq 'vim,psmux') 'Duplicate selection'
+Assert (((Resolve-Components @('BTOP')) -join ',') -eq 'btop') 'btop name selection failed'
+Assert (((Resolve-Components @('btop-gpu')) -join ',') -eq 'btop-lhm') 'btop-gpu alias failed'
+Assert (((Resolve-Components @('btop','btop-gpu','vim')) -join ',') -eq 'vim,btop-lhm') 'btop conflict should keep btop-gpu'
+Assert ((Get-ComponentCommand 'btop-lhm') -eq 'btop') 'btop-gpu command name wrong'
 
 $tokens = $null; $errors = $null
 $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $root 'install.ps1'), [ref]$tokens, [ref]$errors)
@@ -53,6 +69,11 @@ try {
     $null = New-Item -ItemType Directory -Path $current -Force
     [IO.File]::WriteAllText((Join-Path $current 'manifest.json'), '{}')
     Assert ((Get-ToolState psmux $temp).State -eq 'ScoopInstalled') 'Broken Scoop shim not recognized'
+    Assert ((Get-ToolState btop-lhm $temp).State -eq 'Missing') 'Missing btop-lhm not recognized'
+    $lhm = Join-Path $temp 'apps\btop-lhm\current'
+    $null = New-Item -ItemType Directory -Path $lhm -Force
+    [IO.File]::WriteAllText((Join-Path $lhm 'manifest.json'), '{}')
+    Assert ((Get-ToolState btop-lhm $temp).State -eq 'ScoopInstalled') 'btop-lhm without shim not recognized'
     $env:LOCALAPPDATA = Join-Path $temp 'local'
     $vim = Join-Path $env:LOCALAPPDATA 'Programs\Vim\vim.exe'
     $null = New-Item -ItemType Directory -Path (Split-Path $vim) -Force
