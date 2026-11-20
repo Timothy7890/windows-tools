@@ -258,6 +258,7 @@ config/
     ├── yazi.toml              → 回车用 Vim 编辑文本
     ├── keymap.toml            → 快捷键（安装时生成本机脚本路径）
     ├── plugins/ssh-copy.yazi/main.lua
+    ├── plugins/drives.yazi/main.lua
     └── scripts/
         ├── new-window.ps1
         ├── transfer-start.ps1
@@ -266,9 +267,10 @@ config/
 ```
 
 - `g C` / `g D` / `g E` / `g F` / `g G`：跳转对应盘符，按键先后输入，大写字母。
+- `g V`：列出当前实际存在的所有盘符（含临时插入的移动硬盘、映射的网络盘），再按盘符字母跳转。每次按键时重新检测，插拔硬盘后无需重启 Yazi。
 - `g i`：打开 lazygit（检测到已安装时才生成该快捷键）。
 - `g l`：在当前目录新开一个 psmux 窗口（必须在 psmux 内运行 Yazi）。如果当前目录有 `yazi_todo.yazi`，会把其中每一行作为命令发送到新窗口执行，例如写入 `conda activate myenv`。Windows 上新窗口是 PowerShell，所以该文件里要写 PowerShell 能执行的命令。
-  已部署过旧 keymap 的机器不会自动覆盖，需运行 `.\install.ps1 yazi -ConfigureOnly -ForceConfig`（先备份再替换）或手动合并 `g l` 这一行。
+  已部署过旧 keymap 的机器不会自动覆盖，需运行 `.\install.ps1 yazi -ConfigureOnly -ForceConfig`（先备份再替换）或手动合并 `g l`、`g V` 这两行（插件文件是新增的，会自动部署）。
 - 文本文件回车：Vim 编辑，`:q` 返回。
 - `c c` / `c f`：保留 Yazi 原本复制动作，再通过 OSC 52 向 SSH 客户端发送路径/文件名文字。本机终端须允许剪贴板写入，psmux 须支持转发；不能替代文件传输。
 - `R`：psmux 右侧分屏显示目标菜单，scp 传输文件或目录，成功后关闭。必须在 psmux 内运行 Yazi。
