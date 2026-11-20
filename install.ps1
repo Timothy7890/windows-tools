@@ -255,9 +255,9 @@ if ($selected -contains 'yazi') {
     }
     $configDir = if ($env:YAZI_CONFIG_HOME) { $env:YAZI_CONFIG_HOME } else { Join-Path $env:APPDATA 'yazi\config' }
     $sourceDir = Join-Path $PSScriptRoot 'config\yazi'
-    foreach ($file in Get-ChildItem -LiteralPath $sourceDir -File -Recurse) {
+    $yaziFiles = @(foreach ($file in Get-ChildItem -LiteralPath $sourceDir -File -Recurse) {
         $relative = $file.FullName.Substring($sourceDir.Length + 1)
-        $destination = Join-Path $configDir $relative
+        $content = $null
         if ($relative -eq 'keymap.toml') {
             $startScript = Join-Path $configDir 'scripts\transfer-start.ps1'
             $command = New-TransferKeyCommand $startScript
@@ -267,12 +267,22 @@ if ($selected -contains 'yazi') {
             if (-not (Get-Command lazygit -CommandType Application,ExternalScript -ErrorAction SilentlyContinue)) {
                 $content = ($content -split '\r?\n' | Where-Object { $_ -notmatch 'desc = "Lazygit"' }) -join "`n"
             }
-            Install-ConfigFile $file.FullName $destination -Content $content -Force:$ForceConfig
-        } else {
-            # Personal targets are never replaced, even with ForceConfig.
-            $replace = $ForceConfig -and ($relative -ne 'scripts\targets.json')
-            Install-ConfigFile $file.FullName $destination -Force:$replace
         }
+        [pscustomobject]@{ Relative = $relative; Source = $file.FullName; Destination = (Join-Path $configDir $relative); Content = $content }
+    })
+    # Personal targets are never replaced, even with ForceConfig or an accepted update.
+    $managed = @($yaziFiles | Where-Object { $_.Relative -ne 'scripts\targets.json' })
+    $updateYazi = [bool]$ForceConfig
+    if (-not $ForceConfig) {
+        $changed = @($managed | Where-Object { Test-ConfigFileChanged -Source $_.Source -Destination $_.Destination -Content $_.Content })
+        if ($changed.Count) {
+            $updateYazi = Read-ConfigUpdate -Names @($changed | ForEach-Object Relative) -NonInteractive:$NonInteractive
+        }
+    }
+    foreach ($entry in $yaziFiles) {
+        $force = $updateYazi -and ($entry.Relative -ne 'scripts\targets.json')
+        if ($null -ne $entry.Content) { Install-ConfigFile $entry.Source $entry.Destination -Content $entry.Content -Force:$force }
+        else { Install-ConfigFile $entry.Source $entry.Destination -Force:$force }
     }
     Initialize-MacSsh -SshDir (Join-Path $env:USERPROFILE '.ssh') -NonInteractive:$NonInteractive
     Write-Host "Yazi config: $configDir"

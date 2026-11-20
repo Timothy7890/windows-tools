@@ -47,6 +47,29 @@ function Install-ConfigFile {
 }
 
 
+function Test-ConfigFileChanged {
+    # True only when an installed file exists and differs from the new template; missing files are just installed.
+    # Content stays untyped: a [string] parameter would turn $null into '' and compare against an empty file.
+    param([string]$Source, [string]$Destination, $Content = $null)
+    if (-not (Test-Path -LiteralPath $Destination)) { return $false }
+    $new = if ($null -ne $Content) { (New-Object Text.UTF8Encoding($false)).GetBytes($Content) } else { [IO.File]::ReadAllBytes($Source) }
+    return [Convert]::ToBase64String([IO.File]::ReadAllBytes($Destination)) -ne [Convert]::ToBase64String($new)
+}
+function Read-ConfigUpdate {
+    param([string[]]$Names, [switch]$NonInteractive)
+    Write-Host '以下 Yazi 配置与新版不同：' -ForegroundColor Yellow
+    $Names | ForEach-Object { Write-Host "  $_" }
+    if ($NonInteractive) {
+        Write-Host '无交互模式保留现有文件；如需更新，加 -ForceConfig 重新运行。' -ForegroundColor Yellow
+        return $false
+    }
+    while ($true) {
+        $answer = (Read-Host '是否更新为新版？旧文件会先备份 [Y/n]').Trim()
+        if (-not $answer -or $answer -match '^(y|yes)$') { return $true }
+        if ($answer -match '^(n|no)$') { return $false }
+        Write-Warning '请输入 y 或 n。'
+    }
+}
 function Resolve-Components {
     param([string[]]$Names)
     $allowed = @('vim','psmux','yazi','chafa','git','lazygit','btop-gpu','btop')

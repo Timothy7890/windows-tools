@@ -99,9 +99,23 @@ try {
     [IO.File]::WriteAllText($conf, "selected_gpu = `"Intel(R) UHD Graphics`"`r`n")
     Set-BtopSelectedGpu -Path $conf -GpuName 'NVIDIA GeForce RTX 3090'
     Assert ((Get-Content $conf -Raw) -match 'Intel') 'User-chosen selected_gpu overwritten'
+    $src = Join-Path $temp 'tpl.toml'; $dst = Join-Path $temp 'installed.toml'
+    [IO.File]::WriteAllText($src, 'new')
+    Assert (-not (Test-ConfigFileChanged -Source $src -Destination $dst)) 'Missing file reported as changed'
+    [IO.File]::WriteAllText($dst, 'new')
+    Assert (-not (Test-ConfigFileChanged -Source $src -Destination $dst)) 'Identical file reported as changed'
+    Assert (Test-ConfigFileChanged -Source $src -Destination $dst -Content 'generated') 'Generated content difference missed'
+    Assert (-not (Test-ConfigFileChanged -Source $src -Destination $dst -Content 'new')) 'Generated identical content reported as changed'
+    [IO.File]::WriteAllText($dst, 'old')
+    Assert (Test-ConfigFileChanged -Source $src -Destination $dst) 'Outdated file not detected'
+    Answers @('')
+    Assert (Read-ConfigUpdate -Names @('keymap.toml')) 'Config update default should be yes'
+    Answers @('maybe','n')
+    Assert (-not (Read-ConfigUpdate -Names @('keymap.toml'))) 'Declined config update or retry failed'
+    Assert (-not (Read-ConfigUpdate -Names @('keymap.toml') -NonInteractive)) 'NonInteractive must keep files'
 } finally {
     $env:LOCALAPPDATA = $oldLocal; $env:YAZI_FILE_ONE = $oldFile
     Remove-Item $temp -Force -Recurse
     Remove-Variable Answers -Scope Global -ErrorAction SilentlyContinue
 }
-Write-Host 'PASS: interactive defaults/custom input/retry, CLI positional/named binding, no forced dependencies, command/standalone/Scoop detection, preview reuse, btop GPU selection.' -ForegroundColor Green
+Write-Host 'PASS: interactive defaults/custom input/retry, CLI positional/named binding, no forced dependencies, command/standalone/Scoop detection, preview reuse, btop GPU selection, config update prompt.' -ForegroundColor Green

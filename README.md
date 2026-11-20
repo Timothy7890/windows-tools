@@ -270,7 +270,6 @@ config/
 - `g V`：列出当前实际存在的所有盘符（含临时插入的移动硬盘、映射的网络盘），再按盘符字母跳转。每次按键时重新检测，插拔硬盘后无需重启 Yazi。
 - `g i`：打开 lazygit（检测到已安装时才生成该快捷键）。
 - `g l`：在当前目录新开一个 psmux 窗口（必须在 psmux 内运行 Yazi）。如果当前目录有 `yazi_todo.yazi`，会把其中每一行作为命令发送到新窗口执行，例如写入 `conda activate myenv`。Windows 上新窗口是 PowerShell，所以该文件里要写 PowerShell 能执行的命令。
-  已部署过旧 keymap 的机器不会自动覆盖，需运行 `.\install.ps1 yazi -ConfigureOnly -ForceConfig`（先备份再替换）或手动合并 `g l`、`g V` 这两行（插件文件是新增的，会自动部署）。
 - 文本文件回车：Vim 编辑，`:q` 返回。
 - `c c` / `c f`：保留 Yazi 原本复制动作，再通过 OSC 52 向 SSH 客户端发送路径/文件名文字。本机终端须允许剪贴板写入，psmux 须支持转发；不能替代文件传输。
 - `R`：psmux 右侧分屏显示目标菜单，scp 传输文件或目录，成功后关闭。必须在 psmux 内运行 Yazi。
@@ -411,7 +410,7 @@ yazi
 git pull
 ```
 
-`git pull` 只更新仓库文件，不会自动更新已部署的配置。默认重跑安装器仍会保留不同的现有配置；使用 `-ForceConfig` 前确认是否要用模板替换。
+`git pull` 只更新仓库文件。之后重跑 `.\install.ps1 yazi`（或直接 `.\install.ps1`）即可：安装器发现已部署的 Yazi 快捷键、插件或脚本与新版不同时，会列出文件并询问 `是否更新为新版？旧文件会先备份 [Y/n]`，回车更新，`n` 保留。`targets.json` 不在其中，始终保留。无需记 `-ForceConfig`。
 
 <details>
 <summary><strong>已安装用户：备份并更新传输菜单（展开查看）</strong></summary>
@@ -485,7 +484,7 @@ Yazi 的 `file.exe` 从已有环境变量、Git 命令位置、Scoop Git、Git �
 
 如果 Scoop 目录非空但命令不存在且需要安装软件，安装器停止并保留目录。先检查旧安装/恢复 PATH，不会自动删除或搬走现有软件。
 
-配置内容相同则跳过；内容不同默认保留并输出 `PRESERVED`，因此已有自定义配置时，部分新功能可能尚未启用。自行合并，或确认使用模板后加 `-ForceConfig`。个人传输目标 `targets.json` 即使指定 ForceConfig 也始终保留。
+配置内容相同则跳过。Yazi 配置（快捷键、插件、脚本）内容不同时会询问是否更新，同意则先备份再替换；拒绝或 `-NonInteractive` 下保留并输出 `PRESERVED`。其他配置（如 vimrc）内容不同默认保留，自行合并，或确认使用模板后加 `-ForceConfig`。个人传输目标 `targets.json` 即使指定 ForceConfig 也始终保留。
 
 安装器将已有 Scoop shims 放到本次进程 PATH 最前面；新终端可能仍受原有独立安装软件影响。用 `Get-Command vim -All`、`Get-Command yazi -All` 检查实际路径。不会卸载原来的 Vim。
 
