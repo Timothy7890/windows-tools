@@ -262,6 +262,8 @@ if ($selected -contains 'yazi') {
             $startScript = Join-Path $configDir 'scripts\transfer-start.ps1'
             $command = New-TransferKeyCommand $startScript
             $content = [IO.File]::ReadAllText($file.FullName).Replace('"@@TRANSFER_COMMAND@@"', (ConvertTo-Json -InputObject $command -Compress))
+            $windowCommand = New-TransferKeyCommand (Join-Path $configDir 'scripts\new-window.ps1') -Arguments ''
+            $content = $content.Replace('"@@NEW_WINDOW_COMMAND@@"', (ConvertTo-Json -InputObject $windowCommand -Compress))
             if (-not (Get-Command lazygit -CommandType Application,ExternalScript -ErrorAction SilentlyContinue)) {
                 $content = ($content -split '\r?\n' | Where-Object { $_ -notmatch 'desc = "Lazygit"' }) -join "`n"
             }

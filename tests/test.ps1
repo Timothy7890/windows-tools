@@ -64,6 +64,9 @@ try {
     }
     $key = New-TransferKeyCommand "C:\Users\O'Brien\AppData\Roaming\yazi\config\scripts\transfer-start.ps1"
     [IO.File]::WriteAllText((Join-Path $temp 'key.txt'), $key)
+    Assert ($key.EndsWith('transfer-start.ps1" %s' + [char]39)) 'Transfer key lost %s'
+    $windowKey = New-TransferKeyCommand 'C:\yazi\scripts\new-window.ps1' -Arguments ''
+    Assert ($windowKey -eq ('shell --orphan ' + [char]39 + 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\yazi\scripts\new-window.ps1"' + [char]39)) 'g l key command wrong'
     Write-Host 'PASS: syntax, proxy validation, config preservation/backup/idempotence, concurrent transfers, Unicode/space/apostrophe filenames, cleanup.' -ForegroundColor Green
 } finally {
     $env:TEMP = $oldTemp

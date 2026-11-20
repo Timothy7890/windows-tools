@@ -10,8 +10,8 @@ function ConvertTo-ProxyUri {
     return $uri
 }
 function New-TransferKeyCommand {
-    param([string]$ScriptPath)
-    $command = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' + $ScriptPath + '" %s'
+    param([string]$ScriptPath, [string]$Arguments = ' %s')
+    $command = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' + $ScriptPath + '"' + $Arguments
     # Yazi parses shell command arguments using shell-style quoting.
     $quote = [string][char]39
     $escapedQuote = $quote + '"' + $quote + '"' + $quote
