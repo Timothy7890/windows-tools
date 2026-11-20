@@ -83,9 +83,25 @@ try {
     $env:YAZI_FILE_ONE = Join-Path $temp 'file.exe'
     [IO.File]::WriteAllText($env:YAZI_FILE_ONE, '')
     Assert ((Find-YaziFileExe $temp) -eq $env:YAZI_FILE_ONE) 'Existing preview dependency not reused'
+    Assert ((Get-PreferredGpuName @('Intel(R) UHD Graphics 770','NVIDIA GeForce RTX 3090')) -eq 'NVIDIA GeForce RTX 3090') 'iGPU preferred over 3090'
+    Assert ((Get-PreferredGpuName @('AMD Radeon(TM) Graphics','NVIDIA GeForce RTX 4090')) -eq 'NVIDIA GeForce RTX 4090') 'AMD iGPU preferred over 4090'
+    Assert ((Get-PreferredGpuName @('Intel(R) Iris(R) Xe Graphics','Microsoft Basic Display Adapter')) -eq '') 'iGPU-only machine should keep Auto'
+    Assert ((Get-PreferredGpuName @('Intel(R) UHD Graphics','AMD Radeon RX 7900 XTX')) -eq 'AMD Radeon RX 7900 XTX') 'AMD dGPU not preferred'
+    $conf = Join-Path $temp 'btop.conf'
+    [IO.File]::WriteAllText($conf, '')
+    $script:ConfigResults = @()
+    Set-BtopSelectedGpu -Path $conf -GpuName 'NVIDIA GeForce RTX 3090'
+    Assert ((Get-Content $conf -Raw).Trim() -eq 'selected_gpu = "NVIDIA GeForce RTX 3090"') 'selected_gpu not written to empty btop.conf'
+    [IO.File]::WriteAllText($conf, "show_gpu = True`r`nselected_gpu = `"Auto`"`r`n")
+    Set-BtopSelectedGpu -Path $conf -GpuName 'NVIDIA GeForce RTX 3090'
+    $text = Get-Content $conf -Raw
+    Assert ($text -match 'show_gpu = True' -and $text -match 'selected_gpu = "NVIDIA GeForce RTX 3090"' -and $text -notmatch 'Auto') 'Auto selected_gpu not replaced'
+    [IO.File]::WriteAllText($conf, "selected_gpu = `"Intel(R) UHD Graphics`"`r`n")
+    Set-BtopSelectedGpu -Path $conf -GpuName 'NVIDIA GeForce RTX 3090'
+    Assert ((Get-Content $conf -Raw) -match 'Intel') 'User-chosen selected_gpu overwritten'
 } finally {
     $env:LOCALAPPDATA = $oldLocal; $env:YAZI_FILE_ONE = $oldFile
     Remove-Item $temp -Force -Recurse
     Remove-Variable Answers -Scope Global -ErrorAction SilentlyContinue
 }
-Write-Host 'PASS: interactive defaults/custom input/retry, CLI positional/named binding, no forced dependencies, command/standalone/Scoop detection, preview reuse.' -ForegroundColor Green
+Write-Host 'PASS: interactive defaults/custom input/retry, CLI positional/named binding, no forced dependencies, command/standalone/Scoop detection, preview reuse, btop GPU selection.' -ForegroundColor Green

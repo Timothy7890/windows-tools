@@ -74,6 +74,37 @@ function Get-ComponentCommand {
     if ($Name -eq 'btop-lhm') { return 'btop' }
     return $Name
 }
+function Get-PreferredGpuName {
+    # btop4win shows one GPU and "Auto" means the first one LibreHardwareMonitor lists (often the iGPU).
+    param([string[]]$Names)
+    $ignored = 'Microsoft Basic|Remote Display|Virtual|Parsec|Meta Virtual|Citrix|DisplayLink|Mirage'
+    $integrated = '^Intel|Radeon\(TM\) Graphics$|Radeon Graphics$|Radeon\(TM\) \d+M? Graphics$'
+    $real = @($Names | Where-Object { $_ -and $_ -notmatch $ignored } | ForEach-Object { $_.Trim() } | Select-Object -Unique)
+    $discrete = @($real | Where-Object { $_ -notmatch $integrated })
+    if (-not $discrete.Count) { return '' }
+    $nvidia = @($discrete | Where-Object { $_ -match '^NVIDIA' })
+    if ($nvidia.Count) { return $nvidia[0] }
+    return $discrete[0]
+}
+function Set-BtopSelectedGpu {
+    param([string]$Path, [string]$GpuName)
+    $lines = @()
+    if (Test-Path -LiteralPath $Path) { $lines = @([IO.File]::ReadAllLines($Path)) }
+    $current = $lines | Where-Object { $_ -match '^\s*selected_gpu\s*=' } | Select-Object -First 1
+    if ($current -and $current -notmatch '=\s*"Auto"\s*$') {
+        $script:ConfigResults += "PRESERVED btop selected_gpu: $($current.Trim())"
+        return
+    }
+    $setting = 'selected_gpu = "' + $GpuName + '"'
+    if ($current) { $lines = @($lines | ForEach-Object { if ($_ -match '^\s*selected_gpu\s*=') { $setting } else { $_ } }) }
+    else { $lines += $setting }
+    if ((Test-Path -LiteralPath $Path) -and (Get-Item -LiteralPath $Path).Length -gt 0) {
+        Copy-Item -LiteralPath $Path -Destination ($Path + '.bak-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff'))
+    }
+    # Truncate in place so Scoop's persist hard link keeps pointing at the same file.
+    [IO.File]::WriteAllText($Path, (($lines -join "`r`n") + "`r`n"), (New-Object Text.UTF8Encoding($false)))
+    $script:ConfigResults += "btop selected_gpu -> $GpuName ($Path)"
+}
 function Read-BtopFallback {
     # Returns the package to install instead of btop-lhm, or '' to skip btop.
     Write-Warning '当前终端没有管理员权限：btop-gpu（显卡版 btop-lhm）必须以管理员身份运行，否则无法启动。'

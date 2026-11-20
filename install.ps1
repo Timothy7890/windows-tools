@@ -165,6 +165,16 @@ $script:ConfigResults = @()
 if ($selected -contains 'psmux') {
     Set-PsmuxShellConfig -Path (Join-Path $env:USERPROFILE '.psmux.conf') -NonInteractive:$NonInteractive -Shell $PsmuxShell
 }
+if ($selected -contains 'btop-lhm') {
+    $btopConf = Join-Path $scoopRoot 'persist\btop-lhm\btop.conf'
+    if (-not (Test-Path -LiteralPath $btopConf)) { $btopConf = Join-Path $scoopRoot 'apps\btop-lhm\current\btop.conf' }
+    $gpuNames = @(Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue | ForEach-Object Name)
+    $preferredGpu = Get-PreferredGpuName $gpuNames
+    if ($gpuNames.Count -gt 1 -and $preferredGpu -and (Test-Path -LiteralPath (Split-Path $btopConf -Parent))) {
+        # btop falls back to Auto by itself if this name differs from what LibreHardwareMonitor reports.
+        Set-BtopSelectedGpu -Path $btopConf -GpuName $preferredGpu
+    }
+}
 # Install proxy helpers for both Windows PowerShell and PowerShell 7, without enabling them.
 $helperDir = Join-Path $env:LOCALAPPDATA 'windows-tools'
 $helperPath = Join-Path $helperDir 'proxy.ps1'

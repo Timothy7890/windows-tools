@@ -278,6 +278,7 @@ TOML/Lua 使用 UTF-8 无 BOM；PowerShell 脚本使用 UTF-8 带 BOM，以兼�
 - `btop-gpu`（Scoop 包 `btop-lhm`）：内置 LibreHardwareMonitor，显示显卡占用/温度/显存和 CPU 温度，无需按显卡编译。**必须以管理员身份运行**；首次运行注册驱动服务 `R0btop`（WinRing0），可能被杀毒软件拦截。
 - `btop`：普通版，无需管理员，不显示显卡和 CPU 温度。
 - 同时选两者（含 `all`）时只装 `btop-gpu`。
+- **多显卡：** btop4win 一次只显示一块显卡，`Auto` 取第一块（核显+独显的机器上通常是核显）。安装 `btop-gpu` 时，如果检测到多块显卡且 `btop.conf` 的 `selected_gpu` 还是 `Auto`，会自动改成独显（优先 NVIDIA）；已手动选过的不覆盖。名称对不上时 btop 会自动回到 `Auto`，此时在 btop 中按 `o` → `selected_gpu` 手动选择。多块同型号显卡（如多张 3090）名称相同，btop4win 无法区分，只能看到其中一块；需要同时看所有卡请用 `nvidia-smi -l 1`。
 - 选 `btop-gpu` 但当前终端不是管理员：提示是否改装普通版，回车改装，`n` 跳过 btop；`-NonInteractive` 下自动改装普通版。检查方法：`([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)` 输出 `True` 即为管理员。
 - 已用 Scoop 装了普通版再选 `btop-gpu`：询问后卸载普通版再安装（`btop.conf` 保留）。
 - 两者都只有 x64 版本，需要 Visual C++ 2015-2022 运行库（缺失时安装器会提示 `scoop install extras/vcredist2022`）。文件传输使用 Windows `scp`。
