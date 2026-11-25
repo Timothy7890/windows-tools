@@ -2,7 +2,7 @@
 
 **为 Windows / SSH 终端准备的交互式工具安装与配置包。**
 
-默认安装 **Vim · psmux · Yazi · chafa**，Git / lazygit / btop（显卡版或普通版）按需选择。参考 `linux-tools` 的使用方式，通过 Scoop 安装缺少的软件，并保留已有配置。
+默认安装 **Vim · psmux · Yazi · chafa · poppler**，Git / lazygit / btop（显卡版或普通版）按需选择。参考 `linux-tools` 的使用方式，通过 Scoop 安装缺少的软件，并保留已有配置。
 
 **运行环境：** Windows PowerShell 5.1 / PowerShell 7  ·  **默认代理：** `127.0.0.1:17897`
 
@@ -39,7 +39,7 @@ Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
 
 
 
-1. 选择软件。直接回车默认 **vim、psmux、yazi、chafa**；Git、lazygit 和 btop 默认不选。
+1. 选择软件。直接回车默认 **vim、psmux、yazi、chafa、poppler**；Git、lazygit 和 btop 默认不选。
 2. 检测已有软件，显示路径以及“已存在，跳过下载”“待安装”或“已安装，待修复命令入口”。
 3. 如果选了 Yazi 但找不到 `file.exe`，说明预览依赖缺失，询问是否额外安装 Git，**默认 N**。拒绝不会中止其余安装。
 4. 需要下载时才询问代理。回车使用 **127.0.0.1:17897**，也可输入其他地址；输入 `keep` 保留已有网络设置。
@@ -53,9 +53,9 @@ Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
 
 
 ```text
-1 vim [默认]   2 psmux [默认]   3 yazi [默认]   4 chafa [默认]
-5 git [可选]   6 lazygit [可选]
-7 btop-gpu [可选，含显卡监控，需管理员]   8 btop [可选，普通版，无需管理员]
+1 vim [默认]   2 psmux [默认]   3 yazi [默认]   4 chafa [默认]   5 poppler [默认，PDF 预览]
+6 git [可选]   7 lazygit [可选]
+8 btop-gpu [可选，含显卡监控，需管理员]   9 btop [可选，普通版，无需管理员]
 all 全部（btop 使用显卡版）   q 退出
 ```
 
@@ -80,7 +80,7 @@ all 全部（btop 使用显卡版）   q 退出
 # 仍兼容具名数组参数
 .\install.ps1 -Components vim,psmux -Proxy http://127.0.0.1:17897
 
-# 无交互模式：使用四个默认软件，不自动加 Git
+# 无交互模式：使用五个默认软件，不自动加 Git
 .\install.ps1 -NonInteractive -Proxy 127.0.0.1:17897
 
 # 只部署配置：不下载、不改代理；没有组件参数时仍可交互选择

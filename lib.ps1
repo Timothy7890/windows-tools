@@ -72,7 +72,7 @@ function Read-ConfigUpdate {
 }
 function Resolve-Components {
     param([string[]]$Names)
-    $allowed = @('vim','psmux','yazi','chafa','git','lazygit','btop-gpu','btop')
+    $allowed = @('vim','psmux','yazi','chafa','poppler','git','lazygit','btop-gpu','btop')
     $result = @()
     foreach ($value in $Names) {
         foreach ($name in ($value -split '[,\s]+')) {
@@ -95,6 +95,8 @@ function Resolve-Components {
 function Get-ComponentCommand {
     param([string]$Name)
     if ($Name -eq 'btop-lhm') { return 'btop' }
+    # poppler has no poppler.exe; Yazi's PDF preview calls pdftoppm from it.
+    if ($Name -eq 'poppler') { return 'pdftoppm' }
     return $Name
 }
 function Get-PreferredGpuName {
@@ -140,18 +142,18 @@ function Read-BtopFallback {
 }
 function Read-Components {
     Write-Host '请选择软件（回车使用默认；输入编号或名称，空格分隔）：' -ForegroundColor Cyan
-    Write-Host '  1 vim [默认]   2 psmux [默认]   3 yazi [默认]   4 chafa [默认]'
-    Write-Host '  5 git [可选]   6 lazygit [可选]'
-    Write-Host '  7 btop-gpu [可选，含显卡监控，需管理员]   8 btop [可选，普通版，无需管理员]'
+    Write-Host '  1 vim [默认]   2 psmux [默认]   3 yazi [默认]   4 chafa [默认]   5 poppler [默认，PDF 预览]'
+    Write-Host '  6 git [可选]   7 lazygit [可选]'
+    Write-Host '  8 btop-gpu [可选，含显卡监控，需管理员]   9 btop [可选，普通版，无需管理员]'
     Write-Host '  all 全部（btop 使用显卡版）   q 退出'
-    $names = @('vim','psmux','yazi','chafa','git','lazygit','btop-gpu','btop')
+    $names = @('vim','psmux','yazi','chafa','poppler','git','lazygit','btop-gpu','btop')
     while ($true) {
         $answer = (Read-Host '软件').Trim()
-        if (-not $answer) { return @('vim','psmux','yazi','chafa') }
+        if (-not $answer) { return @('vim','psmux','yazi','chafa','poppler') }
         if ($answer -eq 'q') { throw '用户取消安装。' }
         if ($answer -eq 'all') { $answer = $names -join ' ' }
         $mapped = @($answer -split '[,\s]+' | ForEach-Object {
-            if ($_ -match '^[1-8]$') { $names[[int]$_ - 1] } else { $_ }
+            if ($_ -match '^[1-9]$') { $names[[int]$_ - 1] } else { $_ }
         })
         try { return @(Resolve-Components $mapped) } catch { Write-Warning $_ }
     }
@@ -176,7 +178,7 @@ function Get-ToolState {
         $state = if ($command) { 'Present' } else { 'ScoopInstalled' }
         return [pscustomobject]@{ Name = $Name; State = $state; Path = $current; AddToPath = $false }
     }
-    $commands = @(Get-Command $Name -CommandType Application,ExternalScript -All -ErrorAction SilentlyContinue)
+    $commands = @(Get-Command (Get-ComponentCommand $Name) -CommandType Application,ExternalScript -All -ErrorAction SilentlyContinue)
     if ($commands.Count) {
         return [pscustomobject]@{ Name = $Name; State = 'Present'; Path = $commands[0].Source; AddToPath = $false }
     }

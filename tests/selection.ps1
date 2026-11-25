@@ -12,19 +12,21 @@ function Answers([string[]]$Values) {
     foreach ($value in $Values) { $global:Answers.Enqueue($value) }
 }
 Answers @('')
-Assert (((Read-Components) -join ',') -eq 'vim,psmux,yazi,chafa') 'Wrong interactive default'
-Answers @('1 3 5')
+Assert (((Read-Components) -join ',') -eq 'vim,psmux,yazi,chafa,poppler') 'Wrong interactive default'
+Answers @('1 3 6')
 Assert (((Read-Components) -join ',') -eq 'vim,yazi,git') 'Number selection failed'
 Answers @('vim,chafa')
 Assert (((Read-Components) -join ',') -eq 'vim,chafa') 'Name selection failed'
 Answers @('bad','2')
 Assert (((Read-Components) -join ',') -eq 'psmux') 'Invalid selection did not retry'
-Answers @('7')
-Assert (((Read-Components) -join ',') -eq 'btop-lhm') 'btop-gpu number selection failed'
+Answers @('5')
+Assert (((Read-Components) -join ',') -eq 'poppler') 'poppler number selection failed'
 Answers @('8')
+Assert (((Read-Components) -join ',') -eq 'btop-lhm') 'btop-gpu number selection failed'
+Answers @('9')
 Assert (((Read-Components) -join ',') -eq 'btop') 'btop number selection failed'
 Answers @('all')
-Assert (((Read-Components) -join ',') -eq 'vim,psmux,yazi,chafa,git,lazygit,btop-lhm') 'all selection should use btop-gpu only'
+Assert (((Read-Components) -join ',') -eq 'vim,psmux,yazi,chafa,poppler,git,lazygit,btop-lhm') 'all selection should use btop-gpu only'
 Answers @('')
 Assert ((Read-BtopFallback) -eq 'btop') 'Non-admin fallback default should be plain btop'
 Answers @('n')
@@ -45,6 +47,7 @@ Assert (((Resolve-Components @('BTOP')) -join ',') -eq 'btop') 'btop name select
 Assert (((Resolve-Components @('btop-gpu')) -join ',') -eq 'btop-lhm') 'btop-gpu alias failed'
 Assert (((Resolve-Components @('btop','btop-gpu','vim')) -join ',') -eq 'vim,btop-lhm') 'btop conflict should keep btop-gpu'
 Assert ((Get-ComponentCommand 'btop-lhm') -eq 'btop') 'btop-gpu command name wrong'
+Assert ((Get-ComponentCommand 'poppler') -eq 'pdftoppm') 'poppler command name wrong'
 
 $tokens = $null; $errors = $null
 $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $root 'install.ps1'), [ref]$tokens, [ref]$errors)
@@ -65,6 +68,7 @@ try {
     $state = Get-ToolState chafa $temp
     Assert ($state.State -eq 'Present' -and $state.Path -eq 'C:\existing\chafa.exe') 'Existing command not recognized'
     Assert ((Get-ToolState lazygit $temp).State -eq 'Missing') 'Missing tool not recognized'
+    Assert ((Get-ToolState poppler $temp).State -eq 'Missing') 'Missing poppler not recognized'
     $current = Join-Path $temp 'apps\psmux\current'
     $null = New-Item -ItemType Directory -Path $current -Force
     [IO.File]::WriteAllText((Join-Path $current 'manifest.json'), '{}')

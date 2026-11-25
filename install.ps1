@@ -32,7 +32,7 @@ Write-Host 'Windows 终端工具安装器' -ForegroundColor Cyan
 $selected = if ($Components) {
     @(Resolve-Components $Components)
 } elseif ($NonInteractive) {
-    @('vim','psmux','yazi','chafa')
+    @('vim','psmux','yazi','chafa','poppler')
 } else {
     @(Read-Components)
 }
@@ -316,9 +316,9 @@ if ($selected -contains 'btop' -or $selected -contains 'btop-lhm') {
     }
 }
 if ($selected -contains 'yazi') {
-    foreach ($optional in @('vim','psmux','chafa')) {
+    foreach ($optional in @('vim','psmux','chafa','pdftoppm')) {
         if (-not (Get-Command $optional -CommandType Application,ExternalScript -ErrorAction SilentlyContinue)) {
-            Write-Warning "未找到 $optional；对应的编辑、R 分屏传输或图片预览功能需安装后使用。"
+            Write-Warning "未找到 $optional；对应的编辑、R 分屏传输、图片或 PDF 预览功能需安装后使用。"
         }
     }
 }
