@@ -363,11 +363,21 @@ function Initialize-VizEnv {
     Write-Host "创建 venv：$Path（Python：$($system[0])）"
     & $system[0] @pyArgs -m venv $Path
     if ($LASTEXITCODE -ne 0) { Write-Warning 'venv 创建失败，已跳过 gv 依赖。'; return }
-    Write-Host "安装 $($script:VizPackages -join ' ') ..."
+    Write-Host '升级 pip ...'
     & $python @pip --upgrade pip
-    & $python @pip @script:VizPackages
-    if ($LASTEXITCODE -ne 0 -or -not (Test-VizEnv $Path)) {
-        Write-Warning 'gv 依赖安装失败；请检查代理后重跑 .\install.ps1 yazi。'
+    # 逐个安装并显示 [i/N]；去掉 -q 让 pip 自己显示下载进度条
+    $pipShow = @($pip | Where-Object { $_ -ne '-q' })
+    $failed = @()
+    for ($i = 0; $i -lt $script:VizPackages.Count; $i++) {
+        $pkg = $script:VizPackages[$i]
+        Write-Host ("[{0}/{1}] {2}" -f ($i + 1), $script:VizPackages.Count, $pkg) -ForegroundColor Cyan
+        $watch = [Diagnostics.Stopwatch]::StartNew()
+        & $python @pipShow $pkg
+        if ($LASTEXITCODE -ne 0) { $failed += $pkg; Write-Warning "$pkg 安装失败" }
+        else { Write-Host ("      完成，用时 {0:N0}s" -f $watch.Elapsed.TotalSeconds) -ForegroundColor Green }
+    }
+    if ($failed.Count -or -not (Test-VizEnv $Path)) {
+        Write-Warning "gv 依赖安装失败：$($failed -join ', ')；请检查代理后重跑 .\install.ps1 yazi。"
         return
     }
     $script:ConfigResults += "gv 可视化环境：$Path"
