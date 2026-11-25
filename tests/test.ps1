@@ -53,7 +53,8 @@ try {
     function Start-Sleep { }
     function scp { $global:TestScpArguments = @($args); $global:LASTEXITCODE = 0 }
     foreach ($list in $lists) {
-        $expected = @(Get-Content $list.FullName -Raw | ConvertFrom-Json)
+        $parsed = Get-Content $list.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
+        $expected = @($parsed | ForEach-Object { $_ })
         & (Join-Path $root 'config/yazi/scripts/transfer.ps1') -ListPath $list.FullName
         Assert ($global:TestScpArguments[-1] -eq 'macos-yx:~/Downloads/') 'Wrong transfer destination'
         Assert ($global:TestScpArguments.Count -eq ($expected.Count + 3)) 'File arguments split or lost'

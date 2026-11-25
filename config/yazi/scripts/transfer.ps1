@@ -1,9 +1,12 @@
 ﻿param([Parameter(Mandatory = $true)][string]$ListPath)
 $ErrorActionPreference = 'Stop'
 try {
-    $files = @(Get-Content -LiteralPath $ListPath -Raw -Encoding UTF8 | ConvertFrom-Json)
+    # PowerShell 5.1 的 ConvertFrom-Json 把整个数组当成一个对象输出，先赋值再用 @() 展开
+    $parsed = Get-Content -LiteralPath $ListPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $files = @($parsed | ForEach-Object { $_ })
     if ($files.Count -eq 0) { throw '没有选中文件，已取消。' }
-    $targets = @(Get-Content -LiteralPath (Join-Path $PSScriptRoot 'targets.json') -Raw -Encoding UTF8 | ConvertFrom-Json)
+    $parsed = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'targets.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+    $targets = @($parsed | ForEach-Object { $_ })
     Write-Host '==============================='
     Write-Host '  选择目标服务器'
     Write-Host '==============================='

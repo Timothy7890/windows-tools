@@ -53,8 +53,9 @@ function Start-Viewer {
 }
 
 try {
-    $paths = @(Get-Content -LiteralPath $ListPath -Raw -Encoding UTF8 | ConvertFrom-Json |
-        Where-Object { $_ } | ForEach-Object { ([string]$_).TrimEnd('\', '/') })
+    # PowerShell 5.1 的 ConvertFrom-Json 把整个数组当成一个对象输出，先赋值再展开
+    $raw = Get-Content -LiteralPath $ListPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $paths = @($raw | Where-Object { $_ } | ForEach-Object { ([string]$_).TrimEnd('\', '/') })
     if ($paths.Count -eq 0) { throw '没有选中文件，已取消。' }
 
     $python = Get-VizPython
