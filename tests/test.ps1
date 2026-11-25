@@ -62,13 +62,69 @@ try {
         }
         Assert (-not (Test-Path $list.FullName)) 'Selection list not cleaned up'
     }
+    # ---- g v：分屏启动 + 模式识别 ----
+    $global:TestPaneCommands = @()
+    & (Join-Path $root 'config/yazi/scripts/visualize-start.ps1') @files
+    $vizLists = @(Get-ChildItem $temp -Filter 'yazi-visualize-*.json')
+    Assert ($vizLists.Count -eq 1 -and $global:TestPaneCommands.Count -eq 1) 'g v pane not requested'
+    $decoded = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String(($global:TestPaneCommands[0] -split ' ')[-1]))
+    Assert ($decoded -match "visualize\.ps1' -ListPath ") 'g v pane command wrong'
+    Remove-Item $vizLists[0].FullName
+
+    # A fake interpreter records its arguments instead of starting a web server.
+    $fakePython = Join-Path $temp 'python.cmd'
+    $vizArgsFile = Join-Path $temp 'viz-args.txt'
+    [IO.File]::WriteAllText($fakePython, "@echo off`r`n>`"$vizArgsFile`" echo %*`r`n")
+    $env:YAZI_VIZ_PYTHON = $fakePython
+    $oldLocalAppData = $env:LOCALAPPDATA
+    function Invoke-Viz([string[]]$Selection) {
+        Remove-Item $vizArgsFile -ErrorAction SilentlyContinue
+        $vizList = Join-Path $temp ('viz-' + [guid]::NewGuid().ToString('N') + '.json')
+        [IO.File]::WriteAllText($vizList, (ConvertTo-Json -InputObject @($Selection) -Compress))
+        & (Join-Path $root 'config/yazi/scripts/visualize.ps1') -ListPath $vizList
+        Assert (-not (Test-Path $vizList)) 'g v selection list not cleaned up'
+        $global:TestVizArguments = if (Test-Path $vizArgsFile) { [IO.File]::ReadAllText($vizArgsFile, [Text.Encoding]::Default) } else { $null }
+    }
+    # cmd.exe 以 OEM 代码页回显参数，记录的路径保持 ASCII（仍覆盖空格）
+    $sceneA = Join-Path $temp 'scene A'; $sceneB = Join-Path $temp 'scene_b'
+    foreach ($scene in @($sceneA, $sceneB)) {
+        $null = New-Item -ItemType Directory -Force $scene
+        [IO.File]::WriteAllText((Join-Path $scene 'transforms.json'), '{"frames": []}')
+    }
+    $global:TestReadHost = [Collections.Generic.Queue[string]]::new()
+    function Read-Host { if ($global:TestReadHost.Count) { $global:TestReadHost.Dequeue() } else { '' } }
+    foreach ($a in @('', '1')) { $global:TestReadHost.Enqueue($a) }
+    Invoke-Viz @($sceneA, (Join-Path $sceneB 'transforms.json'))
+    Assert ($global:TestVizArguments -like '*visualize_transforms_web.py*') 'transforms mode not chosen'
+    Assert ($global:TestVizArguments.Contains((Join-Path $sceneA 'transforms.json'))) 'folder selection not resolved to transforms.json'
+    Assert ($global:TestVizArguments.Contains((Join-Path $sceneB 'transforms.json'))) 'file selection lost'
+    Assert ($global:TestVizArguments.TrimEnd() -like '*--port 7007') 'port 1 should be 7007'
+
+    $pngs = Join-Path $temp 'run\semantic\pngs'
+    $null = New-Item -ItemType Directory -Force $pngs
+    [IO.File]::WriteAllBytes((Join-Path $pngs '000.png'), [byte[]](1,2,3))
+    foreach ($a in @('3', '17111')) { $global:TestReadHost.Enqueue($a) }
+    Invoke-Viz @(Split-Path $pngs -Parent)
+    Assert ($global:TestVizArguments -like '*visualize_masks_web.py*') 'mask mode not chosen'
+    Assert ($global:TestVizArguments.Contains('--mask-type semantic') -and $global:TestVizArguments.Contains($pngs)) 'mask arguments wrong'
+    Assert ($global:TestVizArguments.TrimEnd() -like '*--port 17111') 'custom port lost'
+
+    $env:YAZI_VIZ_PYTHON = Join-Path $temp 'missing-python.exe'
+    $env:LOCALAPPDATA = Join-Path $temp 'no-localappdata'
+    Invoke-Viz @($sceneA)
+    Assert ($null -eq $global:TestVizArguments) 'viewer started without Python'
+    Remove-Item Env:YAZI_VIZ_PYTHON
+    $env:LOCALAPPDATA = $oldLocalAppData
+    function Read-Host { return '1' }
+
     $key = New-TransferKeyCommand "C:\Users\O'Brien\AppData\Roaming\yazi\config\scripts\transfer-start.ps1"
     [IO.File]::WriteAllText((Join-Path $temp 'key.txt'), $key)
     Assert ($key.EndsWith('transfer-start.ps1" %s' + [char]39)) 'Transfer key lost %s'
     $windowKey = New-TransferKeyCommand 'C:\yazi\scripts\new-window.ps1' -Arguments ''
     Assert ($windowKey -eq ('shell --orphan ' + [char]39 + 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\yazi\scripts\new-window.ps1"' + [char]39)) 'g l key command wrong'
-    Write-Host 'PASS: syntax, proxy validation, config preservation/backup/idempotence, concurrent transfers, Unicode/space/apostrophe filenames, cleanup.' -ForegroundColor Green
+    Write-Host 'PASS: syntax, proxy validation, config preservation/backup/idempotence, concurrent transfers, g v modes, Unicode/space/apostrophe filenames, cleanup.' -ForegroundColor Green
 } finally {
     $env:TEMP = $oldTemp
+    if ($oldLocalAppData) { $env:LOCALAPPDATA = $oldLocalAppData }
     Remove-Item $temp -Recurse -Force
 }

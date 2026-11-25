@@ -11,4 +11,5 @@ prepend_keymap = [
   { on = ["c", "c"], run = ["copy path", "plugin ssh-copy path"], desc = "Copy path to SSH client" },
   { on = ["c", "f"], run = ["copy filename", "plugin ssh-copy filename"], desc = "Copy filename to SSH client" },
   { on = "R", run = "@@TRANSFER_COMMAND@@", desc = "Psmux transfer" },
+  { on = ["g", "v"], run = "@@VISUALIZE_COMMAND@@", desc = "Psmux web visualize (transforms / masks)" },
 ]

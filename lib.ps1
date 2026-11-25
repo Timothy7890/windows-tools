@@ -300,6 +300,81 @@ $end
 }
 
 
+$script:VizPackages = @('numpy','pillow','plotly','fastapi','uvicorn')
+function Find-SystemPython {
+    # Returns @(exe, args...) for a real Python 3; the WindowsApps alias only opens the Store.
+    # Windows PowerShell turns native stderr into errors under 'Stop'; probe failures are expected here.
+    $ErrorActionPreference = 'Continue'
+    $py = Get-Command py -CommandType Application -ErrorAction SilentlyContinue
+    if ($py) {
+        & $py.Source -3 -c 'import sys' 2>$null
+        if ($LASTEXITCODE -eq 0) { return @($py.Source, '-3') }
+    }
+    foreach ($name in @('python','python3')) {
+        foreach ($cmd in @(Get-Command $name -CommandType Application -All -ErrorAction SilentlyContinue)) {
+            if ($cmd.Source -match '\\WindowsApps\\') { continue }
+            & $cmd.Source -c 'import sys; assert sys.version_info >= (3, 8)' 2>$null
+            if ($LASTEXITCODE -eq 0) { return @($cmd.Source) }
+        }
+    }
+    return @()
+}
+function Test-VizEnv {
+    param([string]$Path)
+    $ErrorActionPreference = 'Continue'
+    $python = Join-Path $Path 'Scripts\python.exe'
+    if (-not (Test-Path -LiteralPath $python -PathType Leaf)) { return $false }
+    & $python -c 'import numpy, PIL, plotly, fastapi, uvicorn' 2>$null
+    return ($LASTEXITCODE -eq 0)
+}
+function Initialize-VizEnv {
+    # Dedicated venv for Yazi "g v"; never touches conda or the system site-packages.
+    param([string]$Path, [string]$Proxy, [switch]$NonInteractive, [switch]$NoDownload)
+    # pip writes warnings to stderr; keep them as output instead of terminating install.ps1.
+    $ErrorActionPreference = 'Continue'
+    if (Test-VizEnv $Path) {
+        Write-Host "[已存在] gv 可视化环境：$Path" -ForegroundColor Green
+        return
+    }
+    if ($NoDownload) {
+        Write-Host "gv 可视化依赖未安装（-ConfigureOnly 不下载）；需要时运行 .\install.ps1 yazi。" -ForegroundColor Yellow
+        return
+    }
+    if ($NonInteractive) {
+        Write-Host '无交互模式跳过 gv 可视化依赖；需要时交互运行 .\install.ps1 yazi。' -ForegroundColor Yellow
+        return
+    }
+    while ($true) {
+        $answer = (Read-Host 'Yazi g v 需要 Python 可视化依赖（约 150MB），是否安装？[Y/n]').Trim()
+        if ($answer -match '^(n|no)$') { Write-Host '已跳过 gv 可视化依赖，按 g v 时会提示安装。'; return }
+        if (-not $answer -or $answer -match '^(y|yes)$') { break }
+        Write-Warning '请输入 y 或 n。'
+    }
+    $system = @(Find-SystemPython)
+    if (-not $system.Count) {
+        Write-Warning '未找到 Python 3.8+。可执行 scoop install python 后重跑 .\install.ps1 yazi；其余配置不受影响。'
+        return
+    }
+    $pyArgs = @()
+    if ($system.Count -gt 1) { $pyArgs = $system[1..($system.Count - 1)] }
+    $python = Join-Path $Path 'Scripts\python.exe'
+    $pip = @('-m','pip','install','-q','--disable-pip-version-check')
+    if ($Proxy) { $pip += @('--proxy', (ConvertTo-ProxyUri $Proxy).AbsoluteUri) }
+    Write-Host "创建 venv：$Path（Python：$($system[0])）"
+    & $system[0] @pyArgs -m venv $Path
+    if ($LASTEXITCODE -ne 0) { Write-Warning 'venv 创建失败，已跳过 gv 依赖。'; return }
+    Write-Host "安装 $($script:VizPackages -join ' ') ..."
+    & $python @pip --upgrade pip
+    & $python @pip @script:VizPackages
+    if ($LASTEXITCODE -ne 0 -or -not (Test-VizEnv $Path)) {
+        Write-Warning 'gv 依赖安装失败；请检查代理后重跑 .\install.ps1 yazi。'
+        return
+    }
+    $script:ConfigResults += "gv 可视化环境：$Path"
+    Write-Host 'gv 可视化依赖安装完成。' -ForegroundColor Green
+}
+
+
 function Initialize-MacSsh {
     [CmdletBinding()]
     param(

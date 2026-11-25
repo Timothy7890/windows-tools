@@ -264,6 +264,8 @@ if ($selected -contains 'yazi') {
             $content = [IO.File]::ReadAllText($file.FullName).Replace('"@@TRANSFER_COMMAND@@"', (ConvertTo-Json -InputObject $command -Compress))
             $windowCommand = New-TransferKeyCommand (Join-Path $configDir 'scripts\new-window.ps1') -Arguments ''
             $content = $content.Replace('"@@NEW_WINDOW_COMMAND@@"', (ConvertTo-Json -InputObject $windowCommand -Compress))
+            $vizCommand = New-TransferKeyCommand (Join-Path $configDir 'scripts\visualize-start.ps1')
+            $content = $content.Replace('"@@VISUALIZE_COMMAND@@"', (ConvertTo-Json -InputObject $vizCommand -Compress))
             if (-not (Get-Command lazygit -CommandType Application,ExternalScript -ErrorAction SilentlyContinue)) {
                 $content = ($content -split '\r?\n' | Where-Object { $_ -notmatch 'desc = "Lazygit"' }) -join "`n"
             }
@@ -284,6 +286,7 @@ if ($selected -contains 'yazi') {
         if ($null -ne $entry.Content) { Install-ConfigFile $entry.Source $entry.Destination -Content $entry.Content -Force:$force }
         else { Install-ConfigFile $entry.Source $entry.Destination -Force:$force }
     }
+    Initialize-VizEnv -Path (Join-Path $env:LOCALAPPDATA 'yazi-viz') -Proxy $Proxy -NonInteractive:$NonInteractive -NoDownload:$ConfigureOnly
     Initialize-MacSsh -SshDir (Join-Path $env:USERPROFILE '.ssh') -NonInteractive:$NonInteractive
     Write-Host "Yazi config: $configDir"
     if ($fileExe) { Write-Host "YAZI_FILE_ONE ($EnvironmentScope): $fileExe" }

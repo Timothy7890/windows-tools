@@ -263,7 +263,11 @@ config/
         ├── new-window.ps1
         ├── transfer-start.ps1
         ├── transfer.ps1
-        └── targets.json
+        ├── targets.json
+        ├── visualize-start.ps1    → g v：写入选中列表，开 psmux 分屏
+        ├── visualize.ps1          → g v：识别模式、选端口、启动网页
+        ├── visualize_transforms_web.py
+        └── visualize_masks_web.py
 ```
 
 - `g C` / `g D` / `g E` / `g F` / `g G`：跳转对应盘符，按键先后输入，大写字母。
@@ -273,7 +277,11 @@ config/
 - 文本文件回车：Vim 编辑，`:q` 返回。
 - `c c` / `c f`：保留 Yazi 原本复制动作，再通过 OSC 52 向 SSH 客户端发送路径/文件名文字。本机终端须允许剪贴板写入，psmux 须支持转发；不能替代文件传输。
 - `R`：psmux 右侧分屏显示目标菜单，scp 传输文件或目录，成功后关闭。必须在 psmux 内运行 Yazi。
-- `YAZI_FILE_ONE`：指向检测到的 Git 安装目录中的 `usr\bin\file.exe`；chafa 用于字符画预览。不是完整 PDF、视频等预览套件。
+- `g v`（小写 v，与选盘符的 `g V` 不同）：psmux 右侧分屏启动网页可视化，选端口（7007 / 7008 / 自定义）后浏览器打开 `http://localhost:端口`，`Ctrl-C` 停止。按选中内容自动选择模式：
+  - 只选一个 `semantic`、`instance` 或 `instance_g` 目录（或其下的 `pngs`）：按 PlantSegNeRF 调色板彩色浏览灰度标签图。
+  - 选中 `transforms.json` 或包含它的文件夹，可多选：3D 显示相机位姿。
+  - 依赖独立 venv `%LOCALAPPDATA%\yazi-viz`（numpy、pillow、plotly、fastapi、uvicorn）。安装 Yazi 时询问是否创建，**默认 Y**；需要系统里已有 Python 3.8+（如 `scoop install python`），走安装时输入的代理。`-NonInteractive` 和 `-ConfigureOnly` 不下载，只提示。想用已有环境可设置 `$env:YAZI_VIZ_PYTHON` 指向其 `python.exe`。
+- `YAZI_FILE_ONE`：指向检测到的 Git 安装目录中的 `usr\bin\file.exe`；chafa 用于字符画预览；poppler 提供 `pdftoppm`，用于 PDF 预览，在预览区按 `J` / `K` 翻页。不是完整的视频等预览套件。
 
 TOML/Lua 使用 UTF-8 无 BOM；PowerShell 脚本使用 UTF-8 带 BOM，以兼容 PowerShell 5.1 中文文件名。Vim 配置只包含通用编辑设置，没有照搬 Linux 依赖 `/dev/tty` 和 `base64` 的 Vim 剪贴板脚本。
 
