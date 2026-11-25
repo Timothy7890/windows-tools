@@ -45,7 +45,8 @@ Assert (((Resolve-Components @('yazi')) -join ',') -eq 'yazi') 'Yazi added unwan
 Assert (((Resolve-Components @('vim','VIM','psmux')) -join ',') -eq 'vim,psmux') 'Duplicate selection'
 Assert (((Resolve-Components @('BTOP')) -join ',') -eq 'btop') 'btop name selection failed'
 Assert (((Resolve-Components @('btop-gpu')) -join ',') -eq 'btop-lhm') 'btop-gpu alias failed'
-Assert (((Resolve-Components @('btop','btop-gpu','vim')) -join ',') -eq 'vim,btop-lhm') 'btop conflict should keep btop-gpu'
+# Input order is kept everywhere; the plain btop is dropped and btop-gpu stays where it was chosen.
+Assert (((Resolve-Components @('btop','btop-gpu','vim')) -join ',') -eq 'btop-lhm,vim') 'btop conflict should keep btop-gpu'
 Assert ((Get-ComponentCommand 'btop-lhm') -eq 'btop') 'btop-gpu command name wrong'
 Assert ((Get-ComponentCommand 'poppler') -eq 'pdftoppm') 'poppler command name wrong'
 
