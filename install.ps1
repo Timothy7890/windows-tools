@@ -266,6 +266,8 @@ if ($selected -contains 'yazi') {
             $content = $content.Replace('"@@NEW_WINDOW_COMMAND@@"', (ConvertTo-Json -InputObject $windowCommand -Compress))
             $vizCommand = New-TransferKeyCommand (Join-Path $configDir 'scripts\visualize-start.ps1')
             $content = $content.Replace('"@@VISUALIZE_COMMAND@@"', (ConvertTo-Json -InputObject $vizCommand -Compress))
+            $copyToolCommand = New-TransferKeyCommand (Join-Path $configDir 'scripts\copy-tool-start.ps1')
+            $content = $content.Replace('"@@COPYTOOL_COMMAND@@"', (ConvertTo-Json -InputObject $copyToolCommand -Compress))
             if (-not (Get-Command lazygit -CommandType Application,ExternalScript -ErrorAction SilentlyContinue)) {
                 $content = ($content -split '\r?\n' | Where-Object { $_ -notmatch 'desc = "Lazygit"' }) -join "`n"
             }

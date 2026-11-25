@@ -267,7 +267,10 @@ config/
         ├── visualize-start.ps1    → g v：写入选中列表，开 psmux 分屏
         ├── visualize.ps1          → g v：识别模式、选端口、启动网页
         ├── visualize_transforms_web.py
-        └── visualize_masks_web.py
+        ├── visualize_masks_web.py
+        ├── copy-tool-start.ps1    → g y：写入选中列表，开 psmux 分屏
+        ├── copy-tool.ps1          → g y：目录工具菜单
+        └── use_existed_trans.py   → g y 功能 4 调用（只用 Python 标准库）
 ```
 
 - `g C` / `g D` / `g E` / `g F` / `g G`：跳转对应盘符，按键先后输入，大写字母。
@@ -281,6 +284,12 @@ config/
   - 只选一个 `semantic`、`instance` 或 `instance_g` 目录（或其下的 `pngs`）：按 PlantSegNeRF 调色板彩色浏览灰度标签图。
   - 选中 `transforms.json` 或包含它的文件夹，可多选：3D 显示相机位姿。
   - 依赖独立 venv `%LOCALAPPDATA%\yazi-viz`（numpy、pillow、plotly、fastapi、uvicorn）。安装 Yazi 时询问是否创建，**默认 Y**；需要系统里已有 Python 3.8+（如 `scoop install python`），走安装时输入的代理。`-NonInteractive` 和 `-ConfigureOnly` 不下载，只提示。想用已有环境可设置 `$env:YAZI_VIZ_PYTHON` 指向其 `python.exe`。
+- `g y`：psmux 右侧分屏打开目录工具（与 linux-tools 的 `g y` 一致），每一步先预览再确认 [Y/n]：
+  1. **挑选子文件夹复制 / 剪切**（选 1 个或多个文件夹）：以某个子目录为参考勾选项，可输入编号、`a` 全选，或按名字匹配 `.mp4`、`*_mask*`（每个子目录各自匹配，不区分大小写）。结果放到同级 `<名>-Copy` / `<名>-Move`，可选**保留结构**或**平铺一层**；平铺有重名时先列出，可加子目录名前缀或取消。
+  2. **目录重整**（选 1 个）：`<大>\L1\L2` → `<大>-Reorg\L2\L1`，日期/品种 ↔ 品种/日期，移动方式。
+  3. **拼接**（选 2 个）：把源的孙目录移动到目标对应一级目录下；有任何重名冲突则整体中止，不做改动。
+  4. **transforms 广播**（选 1 个源品种目录或其 `transforms.json`）：把各日期的 `transforms.json` 写到同级其他品种的相同日期下，按目标 `images\` 过滤帧，原文件备份为 `transforms_<时间>.json`。需要 Python 3（`py -3` 或 `python`，可用 `$env:YAZI_TT_PYTHON` 指定），不需要额外的包。
+  - 剪切、重整、拼接都是**移动**，建议先用复制或测试数据确认。
 - `YAZI_FILE_ONE`：指向检测到的 Git 安装目录中的 `usr\bin\file.exe`；chafa 用于字符画预览；poppler 提供 `pdftoppm`，用于 PDF 预览，在预览区按 `J` / `K` 翻页。不是完整的视频等预览套件。
 
 TOML/Lua 使用 UTF-8 无 BOM；PowerShell 脚本使用 UTF-8 带 BOM，以兼容 PowerShell 5.1 中文文件名。Vim 配置只包含通用编辑设置，没有照搬 Linux 依赖 `/dev/tty` 和 `base64` 的 Vim 剪贴板脚本。
